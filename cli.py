@@ -112,9 +112,14 @@ def _run_interactive_mode():
         typer.echo(f"\n正在爬取：{name} ({domain})")
 
         if company_type == 'feishu':
-            jobs = asyncio.run(_crawl_company(name, domain))
-            all_jobs.extend(jobs)
-            typer.echo(f"  爬取到 {len(jobs)} 个职位")
+            jobs = asyncio.run(_crawl_company(name, domain, 'feishu'))
+        elif company_type == 'bytedance':
+            jobs = asyncio.run(_crawl_company(name, domain, 'bytedance'))
+        else:
+            jobs = asyncio.run(_crawl_company(name, domain, 'feishu'))
+
+        all_jobs.extend(jobs)
+        typer.echo(f"  爬取到 {len(jobs)} 个职位")
 
     if all_jobs:
         fmt = 'excel' if output.endswith('.xlsx') else 'csv'
