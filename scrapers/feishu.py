@@ -54,16 +54,25 @@ class FeishuScraper(BaseScraper):
         self._api_responses = []
 
         async def handle_response(response):
-            if "search/job/posts" in response.url:
-                try:
-                    data = await response.json()
-                    if data and data.get('code') == 0:
-                        self._api_responses.append({
-                            'list': data.get('data', {}).get('job_post_list', []),
-                            'total': data.get('data', {}).get('total', 0)
-                        })
-                except Exception as e:
-                    print(f"解析 API 响应失败：{e}")
+            # 只拦截 API 请求，过滤非 API 请求
+            if "/api/v1/search/job/posts" not in response.url:
+                return
+
+            # 只处理 JSON 响应
+            content_type = response.headers.get("content-type", "")
+            if "application/json" not in content_type and "text/json" not in content_type:
+                return
+
+            try:
+                data = await response.json()
+                if data and data.get('code') == 0:
+                    self._api_responses.append({
+                        'list': data.get('data', {}).get('job_post_list', []),
+                        'total': data.get('data', {}).get('total', 0)
+                    })
+            except Exception:
+                # 静默忽略解析错误（非目标 API 请求）
+                pass
 
         self.page.on("response", handle_response)
 
