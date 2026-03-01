@@ -1,0 +1,5 @@
+companies:
+  - name: 影视飓风
+    domain: mediastorm.jobs.feishu.cn
+    type: feishu
+    enabled: true
