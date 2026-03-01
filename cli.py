@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from datetime import datetime
 
 from scrapers.feishu import FeishuScraper
+from scrapers.bytedance import ByteDanceScraper
 from storage.csv_excel import JobStorage
 
 app = typer.Typer(help="JobHarvester - 招聘数据爬取工具", invoke_without_command=True)
@@ -302,7 +303,7 @@ def crawl(
             domain = f"{company}.jobs.feishu.cn"
 
         typer.echo(f"正在爬取：{company} ({domain})")
-        jobs = asyncio.run(_crawl_company(company, domain))
+        jobs = asyncio.run(_crawl_company(company, domain, company_type))
         typer.echo(f"爬取到 {len(jobs)} 个职位")
 
         if jobs:
@@ -339,9 +340,14 @@ def _crawl_all_companies(output_path: str, format: str):
         typer.echo(f"\n正在爬取：{name} ({domain})")
 
         if company_type == 'feishu':
-            jobs = asyncio.run(_crawl_company(name, domain))
-            all_jobs.extend(jobs)
-            typer.echo(f"  爬取到 {len(jobs)} 个职位")
+            jobs = asyncio.run(_crawl_company(name, domain, 'feishu'))
+        elif company_type == 'bytedance':
+            jobs = asyncio.run(_crawl_company(name, domain, 'bytedance'))
+        else:
+            jobs = asyncio.run(_crawl_company(name, domain, 'feishu'))
+
+        all_jobs.extend(jobs)
+        typer.echo(f"  爬取到 {len(jobs)} 个职位")
 
     # 保存所有数据
     if all_jobs:
@@ -351,9 +357,12 @@ def _crawl_all_companies(output_path: str, format: str):
         typer.echo("\n未爬取到任何职位数据")
 
 
-async def _crawl_company(company_name: str, domain: str):
+async def _crawl_company(company_name: str, domain: str, company_type: str = 'feishu'):
     """爬取单家公司的职位"""
-    scraper = FeishuScraper(company_name, domain)
+    if company_type == 'bytedance':
+        scraper = ByteDanceScraper(company_name, domain)
+    else:
+        scraper = FeishuScraper(company_name, domain)
     return await scraper.scrape()
 
 

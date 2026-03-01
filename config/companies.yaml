@@ -3,3 +3,8 @@ companies:
     domain: mediastorm.jobs.feishu.cn
     type: feishu
     enabled: true
+
+  - name: 字节跳动
+    domain: jobs.bytedance.com
+    type: bytedance
+    enabled: true
