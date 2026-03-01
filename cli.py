@@ -7,6 +7,7 @@ import questionary
 from pathlib import Path
 from typing import Optional, List
 from contextlib import contextmanager
+from datetime import datetime
 
 from scrapers.feishu import FeishuScraper
 from storage.csv_excel import JobStorage
@@ -22,6 +23,47 @@ def typer_context():
         yield ctx
     except Exception:
         yield None
+
+
+def _generate_filename(prefix: str = "jobs", extension: str = "csv") -> str:
+    """生成带时间戳的文件名"""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"{prefix}_{timestamp}.{extension}"
+
+
+def _resolve_output_path(output: Optional[str], output_dir: Optional[str], format: str) -> str:
+    """解析输出文件路径"""
+    # 确定扩展名
+    ext = "xlsx" if format == "excel" else "csv"
+
+    # 如果指定了完整路径，直接使用
+    if output:
+        # 如果只有文件名没有路径，且指定了 output_dir，则组合
+        if not Path(output).is_absolute() and output_dir:
+            output_path = Path(output_dir) / output
+        else:
+            output_path = Path(output)
+
+        # 确保目录存在
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # 如果没有扩展名，添加扩展名
+        if not output.endswith(('.csv', '.xlsx')):
+            output_path = Path(str(output_path) + f".{ext}")
+        return str(output_path)
+
+    # 使用默认文件名（带时间戳）
+    filename = _generate_filename("jobs", ext)
+
+    # 如果指定了输出目录
+    if output_dir:
+        output_path = Path(output_dir) / filename
+    else:
+        output_path = Path(filename)
+
+    # 确保目录存在
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    return str(output_path)
 
 
 @app.callback()
@@ -46,15 +88,15 @@ def _run_interactive_mode():
 
     # 非终端环境使用默认文件名
     if not sys.stdin.isatty():
-        output = "jobs.csv"
+        output = _generate_filename("jobs")
     else:
         output = questionary.text(
-            "输入保存文件名 (默认：jobs.csv):",
-            default="jobs.csv"
+            "输入保存文件名 (默认：jobs_时间戳.csv):",
+            default=_generate_filename("jobs")
         ).ask()
 
     if not output:
-        output = "jobs.csv"
+        output = _generate_filename("jobs")
 
     # 如果没有扩展名，添加.csv
     if not output.endswith(('.csv', '.xlsx')):
@@ -134,15 +176,100 @@ def _select_companies_interactive() -> List[dict]:
     return selected
 
 
-@app.command("crawl")
-def crawl(
-    company: Optional[str] = typer.Option(None, "-c", "--company", help="公司名称"),
-    all_companies: bool = typer.Option(False, "--all", help="爬取所有配置的公司"),
-    output: str = typer.Option("jobs.csv", "-o", "--output", help="输出文件路径"),
+@app.command("run")
+def run(
+    all_companies: bool = typer.Option(False, "--all", "-a", help="爬取所有配置的公司"),
+    output: Optional[str] = typer.Option(None, "-o", "--output", help="输出文件名（默认：jobs_时间戳.csv）"),
+    output_dir: Optional[str] = typer.Option(None, "-d", "--dir", help="输出目录（默认：当前目录）"),
     format: str = typer.Option("csv", "-f", "--format", help="输出格式：csv 或 excel"),
     interactive: bool = typer.Option(False, "-i", "--interactive", help="交互式选择公司"),
 ):
-    """爬取招聘职位"""
+    """
+    快速爬取模式 - 无需交互即可开始
+
+    示例:
+        # 爬取所有公司（默认）
+        python main.py run
+
+        # 爬取所有公司到指定目录
+        python main.py run -d ./output
+
+        # 爬取所有公司，导出为 Excel
+        python main.py run -f excel
+
+        # 交互式选择公司
+        python main.py run -i
+    """
+    # 构建输出路径
+    output_path = _resolve_output_path(output, output_dir, format)
+
+    # 交互式模式
+    if interactive:
+        selected = _select_companies_interactive()
+        if not selected:
+            typer.echo("未选择任何公司")
+            raise typer.Exit(0)
+        all_companies = True  # 设置为全选模式处理
+
+    if not all_companies:
+        # 默认就是爬取所有
+        all_companies = True
+
+    # 爬取所有公司
+    if all_companies:
+        _crawl_all_companies(output_path, format)
+
+
+@app.command("quick")
+def quick(
+    output_dir: Optional[str] = typer.Option(None, "-d", "--dir", help="输出目录（默认：当前目录）"),
+    format: str = typer.Option("csv", "-f", "--format", help="输出格式：csv 或 excel"),
+):
+    """
+    一键爬取 - 最快速的爬取方式，爬取所有启用的公司
+
+    示例:
+        # 最简用法
+        python main.py quick
+
+        # 输出到指定目录
+        python main.py quick -d ./data
+    """
+    output_path = _resolve_output_path(None, output_dir, format)
+    _crawl_all_companies(output_path, format)
+
+
+@app.command("crawl")
+def crawl(
+    company: Optional[str] = typer.Option(None, "-c", "--company", help="公司名称"),
+    all_companies: bool = typer.Option(False, "--all", "-a", help="爬取所有配置的公司"),
+    output: Optional[str] = typer.Option(None, "-o", "--output", help="输出文件名（默认：jobs_时间戳）"),
+    output_dir: Optional[str] = typer.Option(None, "-d", "--dir", help="输出目录"),
+    format: str = typer.Option("csv", "-f", "--format", help="输出格式：csv 或 excel"),
+    interactive: bool = typer.Option(False, "-i", "--interactive", help="交互式选择公司"),
+):
+    """
+    爬取招聘职位 - 灵活的爬取命令
+
+    示例:
+        # 爬取所有公司
+        python main.py crawl --all
+
+        # 爬取单家公司
+        python main.py crawl -c "影视飓风"
+
+        # 爬取到指定目录，使用自定义文件名
+        python main.py crawl --all -d ./output -o myjobs.csv
+
+        # 爬取所有公司，导出为 Excel
+        python main.py crawl --all -f excel
+
+        # 交互式选择
+        python main.py crawl -i
+    """
+    # 构建输出路径
+    output_path = _resolve_output_path(output, output_dir, format)
+
     # 交互式模式
     if interactive or (not company and not all_companies):
         selected = _select_companies_interactive()
@@ -152,37 +279,7 @@ def crawl(
         all_companies = True  # 设置为全选模式处理
 
     if all_companies:
-        # 加载配置文件
-        config_path = Path(__file__).parent / "config" / "companies.yaml"
-        if not config_path.exists():
-            typer.echo(f"错误：配置文件不存在 {config_path}")
-            raise typer.Exit(1)
-
-        with open(config_path, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
-
-        companies = [c for c in config.get('companies', []) if c.get('enabled', True)]
-        typer.echo(f"发现 {len(companies)} 家启用的公司")
-
-        all_jobs = []
-        for company_config in companies:
-            name = company_config['name']
-            domain = company_config['domain']
-            company_type = company_config.get('type', 'feishu')
-
-            typer.echo(f"\n正在爬取：{name} ({domain})")
-
-            if company_type == 'feishu':
-                jobs = asyncio.run(_crawl_company(name, domain))
-                all_jobs.extend(jobs)
-                typer.echo(f"  爬取到 {len(jobs)} 个职位")
-
-        # 保存所有数据
-        if all_jobs:
-            JobStorage.save(all_jobs, output, format)
-            typer.echo(f"\n已保存 {len(all_jobs)} 个职位到 {output}")
-        else:
-            typer.echo("\n未爬取到任何职位数据")
+        _crawl_all_companies(output_path, format)
 
     elif company:
         # 爬取单家公司
@@ -209,10 +306,49 @@ def crawl(
         typer.echo(f"爬取到 {len(jobs)} 个职位")
 
         if jobs:
-            JobStorage.save(jobs, output, format)
-            typer.echo(f"已保存到 {output}")
+            JobStorage.save(jobs, output_path, format)
+            typer.echo(f"已保存到 {output_path}")
         else:
             typer.echo("未爬取到任何职位数据")
+
+
+def _crawl_all_companies(output_path: str, format: str):
+    """爬取所有配置的公司"""
+    config_path = Path(__file__).parent / "config" / "companies.yaml"
+    if not config_path.exists():
+        typer.echo(f"错误：配置文件不存在 {config_path}")
+        typer.echo("提示：使用 'python main.py init' 创建配置文件")
+        raise typer.Exit(1)
+
+    with open(config_path, 'r', encoding='utf-8') as f:
+        config = yaml.safe_load(f)
+
+    companies = [c for c in config.get('companies', []) if c.get('enabled', True)]
+    if not companies:
+        typer.echo("错误：没有启用的公司配置")
+        raise typer.Exit(1)
+
+    typer.echo(f"发现 {len(companies)} 家启用的公司")
+
+    all_jobs = []
+    for company_config in companies:
+        name = company_config['name']
+        domain = company_config['domain']
+        company_type = company_config.get('type', 'feishu')
+
+        typer.echo(f"\n正在爬取：{name} ({domain})")
+
+        if company_type == 'feishu':
+            jobs = asyncio.run(_crawl_company(name, domain))
+            all_jobs.extend(jobs)
+            typer.echo(f"  爬取到 {len(jobs)} 个职位")
+
+    # 保存所有数据
+    if all_jobs:
+        JobStorage.save(all_jobs, output_path, format)
+        typer.echo(f"\n已保存 {len(all_jobs)} 个职位到 {output_path}")
+    else:
+        typer.echo("\n未爬取到任何职位数据")
 
 
 async def _crawl_company(company_name: str, domain: str):
@@ -252,9 +388,22 @@ def init_config():
 
 @app.command("list")
 def list_jobs(
-    filepath: str = typer.Argument("jobs.csv", help="职位数据文件"),
+    filepath: str = typer.Argument("jobs*.csv", help="职位数据文件路径（支持通配符）"),
+    limit: int = typer.Option(20, "-l", "--limit", help="显示条数（默认 20）"),
 ):
     """查看已保存的职位数据"""
+    from glob import glob
+
+    # 支持通配符
+    if '*' in filepath:
+        files = glob(filepath)
+        if not files:
+            typer.echo(f"未找到匹配的文件：{filepath}")
+            raise typer.Exit(1)
+        # 使用最新的文件
+        filepath = max(files, key=lambda p: Path(p).stat().st_mtime)
+        typer.echo(f"使用最新文件：{filepath}")
+
     path = Path(filepath)
     if not path.exists():
         typer.echo(f"文件不存在：{filepath}")
@@ -267,10 +416,31 @@ def list_jobs(
 
     typer.echo(f"\n共 {len(df)} 个职位:\n")
 
-    for idx, row in df.iterrows():
+    display_count = min(limit, len(df))
+    for idx, row in df.head(display_count).iterrows():
         typer.echo(f"{idx + 1}. {row['title']} - {row['company']}")
         typer.echo(f"   薪资：{row['salary']} | 地点：{row['location']} | 类型：{row['job_type']}")
         typer.echo()
+
+    if len(df) > limit:
+        typer.echo(f"... 还有 {len(df) - limit} 条数据未显示（使用 -l 参数调整）")
+
+
+@app.command("config")
+def show_config():
+    """查看当前配置"""
+    config_path = Path(__file__).parent / "config" / "companies.yaml"
+    if not config_path.exists():
+        typer.echo("配置文件不存在")
+        typer.echo("提示：使用 'python main.py init' 创建配置文件")
+        raise typer.Exit(1)
+
+    with open(config_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    typer.echo(f"配置文件：{config_path}")
+    typer.echo("-" * 50)
+    typer.echo(content)
 
 
 if __name__ == "__main__":
