@@ -50,8 +50,7 @@ def _run_interactive_mode():
     else:
         output = questionary.text(
             "输入保存文件名 (默认：jobs.csv):",
-            default="jobs.csv",
-            style=questionary.Style()
+            default="jobs.csv"
         ).ask()
 
     if not output:
