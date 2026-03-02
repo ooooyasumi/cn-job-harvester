@@ -112,22 +112,32 @@ class TencentScraper(BaseScraper):
             await self._close_browser()
 
     async def _collect_join_qq_jobs(self) -> List[Job]:
-        """收集 join.qq.com 的职位（校招/实习）"""
+        """收集 join.qq.com 的职位（校招/实习）- 支持翻页爬取所有数据"""
         jobs = []
 
-        # 从 API 响应中提取职位
-        for resp in self._api_responses:
-            if resp['type'] != 'searchPosition':
-                continue
+        # 先获取总记录数
+        if self._status_callback:
+            self._status_callback("正在获取职位总数...")
 
-            data = resp['data']
-            if data.get('status') != 0:
-                continue
+        total_count = await self._get_join_qq_total_count()
+        if self._status_callback:
+            self._status_callback(f"检测到 {total_count} 个校招/实习职位")
 
-            position_list = data.get('data', {}).get('positionList', [])
+        # 计算总页数（pageSize=100）
+        page_size = 100
+        total_pages = (total_count + page_size - 1) // page_size
 
-            for pos in position_list:
-                # 提取职位信息
+        if self._status_callback:
+            self._status_callback(f"计划爬取 {total_pages} 页数据...")
+
+        # 翻页爬取
+        for page_num in range(1, total_pages + 1):
+            if self._status_callback:
+                self._status_callback(f"正在爬取第 {page_num}/{total_pages} 页...")
+
+            positions = await self._fetch_join_qq_page(page_num, page_size)
+
+            for pos in positions:
                 job = Job(
                     title=pos.get('positionTitle', ''),
                     company=self.company_name,
@@ -140,10 +150,64 @@ class TencentScraper(BaseScraper):
                 )
                 jobs.append(job)
 
+            # 页面间短暂休息
+            if page_num < total_pages:
+                await asyncio.sleep(0.5)
+
         if self._status_callback:
             self._status_callback(f"获取到 {len(jobs)} 个校招/实习职位")
 
         return jobs
+
+    async def _get_join_qq_total_count(self) -> int:
+        """获取 join.qq.com 的总职位数"""
+        result = await self.page.evaluate('''() => {
+            return fetch('https://join.qq.com/api/v1/position/searchPosition', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    projectIdList: [],
+                    projectMappingIdList: [1, 2, 104, 14, 20, 25, 5],
+                    keyword: '',
+                    bgList: [],
+                    workCountryType: 0,
+                    workCityList: [],
+                    recruitCityList: [],
+                    positionFidList: [],
+                    pageIndex: 1,
+                    pageSize: 1
+                })
+            }).then(r => r.json());
+        }''')
+
+        if result.get('status') == 0:
+            return result.get('data', {}).get('count', 0)
+        return 0
+
+    async def _fetch_join_qq_page(self, page_num: int, page_size: int) -> List[Dict]:
+        """获取 join.qq.com 指定页的职位数据"""
+        result = await self.page.evaluate('''([pageNum, pageSize]) => {
+            return fetch('https://join.qq.com/api/v1/position/searchPosition', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    projectIdList: [],
+                    projectMappingIdList: [1, 2, 104, 14, 20, 25, 5],
+                    keyword: '',
+                    bgList: [],
+                    workCountryType: 0,
+                    workCityList: [],
+                    recruitCityList: [],
+                    positionFidList: [],
+                    pageIndex: pageNum,
+                    pageSize: pageSize
+                })
+            }).then(r => r.json());
+        }''', [page_num, page_size])
+
+        if result.get('status') == 0:
+            return result.get('data', {}).get('positionList', [])
+        return []
 
     def _parse_join_qq_cities(self, cities_str: str) -> str:
         """解析 join.qq.com 的城市字符串"""
