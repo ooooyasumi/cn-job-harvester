@@ -165,7 +165,8 @@ class TencentScraper(BaseScraper):
                     break
 
         total_pages = (total_count + 9) // 10  # 每页 10 条
-        max_pages = min(total_pages, self._max_pages) if self._max_pages else min(total_pages, 50)
+        # 默认爬取全部，如果指定了 max_pages 则使用限制
+        max_pages = self._max_pages if self._max_pages else total_pages
 
         if self._status_callback:
             self._status_callback(f"检测到 {total_pages} 页数据（共{total_count}个职位），计划爬取 {max_pages} 页")
