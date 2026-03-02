@@ -6,7 +6,7 @@
 
 **项目位置**: `/Users/ooooyasumi/develop/Project/01_active/project_cn-job-harvester`
 
-**当前版本**: v0.2.0
+**当前版本**: v0.3.9
 
 **功能描述**: 一个命令行工具，用于自动爬取使用飞书招聘系统的公司职位信息，支持自动翻页、CSV/Excel 格式导出。
 
@@ -24,6 +24,10 @@
 | CSV/Excel 导出 | ✅ | 使用 pandas 支持两种格式 |
 | 交互式菜单 | ✅ | questionary 实现多选菜单 |
 | 配置文件管理 | ✅ | YAML 格式公司配置 |
+| 字节跳动爬虫 | ✅ | 支持校招/社招，可爬取全部 17000+ 职位 |
+| 腾讯招聘爬虫 | ✅ | 支持 join.qq.com(校招) 和 careers.tencent.com(社招)，可爬取全部 2500+ 职位 |
+| 进度显示 | ✅ | 实时显示页数、百分比、ETA 预计剩余时间 |
+| Ctrl+C 中断保存 | ✅ | 中断时自动保存已爬取数据 |
 
 ### ✅ 爬取字段
 
@@ -47,12 +51,15 @@ job-harvester/
 ├── scrapers/
 │   ├── __init__.py
 │   ├── base.py                 # 基础爬虫类 (Job dataclass, BaseScraper)
-│   └── feishu.py               # 飞书招聘爬虫 (FeishuScraper)
+│   ├── feishu.py               # 飞书招聘爬虫 (FeishuScraper)
+│   ├── bytedance.py            # 字节跳动爬虫 (ByteDanceScraper)
+│   └── tencent.py              # 腾讯招聘爬虫 (TencentScraper)
 ├── storage/
 │   ├── __init__.py
 │   └── csv_excel.py            # CSV/Excel 存储 (JobStorage)
 ├── cli.py                      # 命令行接口 (Typer + questionary)
 ├── main.py                     # 程序入口
+├── _version.py                 # 版本号定义
 ├── requirements.txt
 └── README.md
 ```
@@ -160,6 +167,38 @@ companies:
     domain: mediastorm.jobs.feishu.cn
     type: feishu
     enabled: true
+
+  - name: 字节跳动
+    domain: jobs.bytedance.com
+    type: bytedance
+    enabled: true
+
+  - name: 腾讯
+    domain: join.qq.com
+    type: tencent
+    enabled: true
+```
+
+### 添加新公司
+
+```yaml
+# 飞书招聘系统
+- name: 新公司
+  domain: company.jobs.feishu.cn
+  type: feishu
+  enabled: true
+
+# 字节跳动
+- name: 字节跳动
+  domain: jobs.bytedance.com
+  type: bytedance
+  enabled: true
+
+# 腾讯招聘
+- name: 腾讯
+  domain: join.qq.com
+  type: tencent
+  enabled: true
 ```
 
 ---
@@ -174,50 +213,86 @@ companies:
 
 **影响**: 不影响实际爬取功能，因为使用了 API 拦截方式
 
-**待优化**: 可以更优雅地处理 signature 获取
+**状态**: ⚠️ 待优化（可更优雅地处理）
 
-### 2. API 响应解析失败
+### 2. 薪资字段显示为 nan
 
-**现象**: 控制台显示 "解析 API 响应失败：Expecting value: line 1 column 1 (char 0)"
+**现象**: 腾讯和字节跳动的职位薪资显示为 `nan`
 
-**原因**: 某些 API 请求返回的是 HTML 而非 JSON（如 logo、图片等）
+**原因**: 这些平台的 API 通常不返回薪资信息
 
-**影响**: 不影响实际功能，因为目标 API 请求仍能正常解析
+**影响**: 轻微，只影响部分平台的薪资显示
 
-**待优化**: 可以添加更精确的 URL 过滤
+**状态**: ✅ 正常行为（平台不提供薪资数据）
 
-### 3. 翻页后 API 数据收集
+### 3. 大规模爬取时间较长
 
-**当前实现**: 翻页后重新收集所有 API 响应，然后去重
+**现象**: 爬取字节跳动全部职位（17000+）需要约 90 分钟
 
-**潜在问题**: 如果翻页逻辑变化，可能导致数据重复或丢失
+**原因**: 需要逐页翻页，每页等待加载
 
-**待优化**: 可以更精确地控制每页数据的获取
+**影响**: 轻度，可通过 `--max-pages` 参数限制
+
+**状态**: ⚠️ 已优化（批量爬取 + 批次休息），无法完全避免
 
 ---
 
-## 待办事项 (TODO)
+## 待办事项与版本计划
 
-### v0.3.0 计划
+### 已完成版本
 
-- [ ] **增量更新（去重）**
+| 版本 | 日期 | 主要内容 |
+|------|------|----------|
+| v0.1.0 | - | 初始版本，基础飞书招聘爬取 |
+| v0.2.0 | - | 完整飞书招聘支持，CSV/Excel 导出 |
+| v0.3.2 | 2026-03-02 | 字节跳动爬虫 + 实时状态显示 |
+| v0.3.3 | 2026-03-02 | 字节跳动翻页功能修复 |
+| v0.3.4 | 2026-03-02 | 字节跳动全量爬取支持（批量机制） |
+| v0.3.5 | 2026-03-02 | 进度显示增强、Ctrl+C 中断保存、序号列 |
+| v0.3.6 | 2026-03-02 | 默认输出目录 output/ |
+| v0.3.7 | 2026-03-02 | 腾讯招聘爬虫支持 |
+| v0.3.8 | 2026-03-02 | 腾讯爬虫类型处理修复 |
+| v0.3.9 | 2026-03-02 | 腾讯爬虫全量爬取支持（移除 50 页限制） |
+
+### v0.4.0 计划（短期）
+
+- [ ] **增量更新功能**
   - 基于职位 ID 或链接去重
-  - 支持只获取新职位
+  - 支持只获取新职位，避免重复爬取
+  - 增量模式：`--incremental` 参数
 
 - [ ] **错误处理和重试机制**
-  - 网络错误重试
+  - 网络错误自动重试（3 次）
   - API 失败降级方案
+  - 超时设置优化
+
+- [ ] **性能优化**
+  - 并发爬取多家公司
+  - 可配置的翻页延迟
+  - 内存优化（流式写入）
+
+### v0.5.0 计划（中期）
 
 - [ ] **更多招聘系统支持**
-  - 北森招聘系统
-  - Moka 招聘系统
+  - [ ] 北森招聘系统 (beisen.com)
+  - [ ] Moka 招聘系统 (moka recruiting)
+  - [ ] 拉勾网 (lagou.com)
+  - [ ] Boss 直聘 (zhipin.com)
 
-### v1.0.0 计划
+- [ ] **数据导出增强**
+  - [ ] JSON 格式支持
+  - [ ] Markdown 表格导出
+  - [ ] 数据库存储（SQLite）
 
-- [ ] 完整的单元测试
-- [ ] 详细的使用文档
-- [ ] 性能优化
-- [ ] PyPI 发布
+### v1.0.0 计划（长期）
+
+- [ ] 完整的单元测试（覆盖率 > 80%）
+- [ ] 详细的使用文档（Sphinx 文档）
+- [ ] PyPI 发布（`pip install job-harvester`）
+- [ ] Docker 镜像
+- [ ] CI/CD 配置
+- [ ] 配置文件验证
+- [ ] 日志系统（logging 模块）
 
 ---
 
