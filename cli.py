@@ -120,19 +120,23 @@ def _run_interactive_mode():
 
     # 非终端环境使用默认文件名
     if not sys.stdin.isatty():
-        output = _generate_filename("jobs")
+        output = _resolve_output_path(None, None, 'csv')
     else:
-        output = questionary.text(
+        # 用户输入文件名（只文件名，不包含路径）
+        user_input = questionary.text(
             "输入保存文件名 (默认：jobs_时间戳.csv):",
             default=_generate_filename("jobs")
         ).ask()
 
-    if not output:
-        output = _generate_filename("jobs")
+        if not user_input:
+            user_input = _generate_filename("jobs")
 
-    # 如果没有扩展名，添加.csv
-    if not output.endswith(('.csv', '.xlsx')):
-        output += '.csv'
+        # 如果没有扩展名，添加.csv
+        if not user_input.endswith(('.csv', '.xlsx')):
+            user_input += '.csv'
+
+        # 使用 _resolve_output_path 解析到 output 目录
+        output = _resolve_output_path(user_input, None, 'csv')
 
     typer.echo("按 Ctrl+C 可中断爬取并保存已获取的数据")
 
