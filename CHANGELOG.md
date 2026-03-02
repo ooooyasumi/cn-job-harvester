@@ -1,5 +1,28 @@
 # 更新日志
 
+## v0.3.6 (2026-03-02)
+
+### 新增功能
+
+#### 默认输出目录
+- 新增 `output/` 文件夹作为默认输出目录
+- 未指定 `-o` 参数时，文件自动保存到 `./output/jobs_时间戳.csv`
+- `list` 命令默认读取 `output/` 目录下的最新文件
+
+### 使用示例
+```bash
+# 爬取并自动保存到 output/jobs_时间戳.csv
+python main.py crawl -c "字节跳动"
+
+# 查看 output 目录最新文件
+python main.py list
+
+# 查看指定文件
+python main.py list output/jobs_20260302_120000.csv
+```
+
+---
+
 ## v0.3.5 (2026-03-02)
 
 ### 新增功能

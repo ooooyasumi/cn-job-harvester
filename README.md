@@ -21,17 +21,23 @@ python main.py
 python main.py crawl -i
 
 # 方式 3：爬取配置中的所有公司
-python main.py crawl --all -o jobs.csv
+python main.py crawl --all
 
 # 方式 4：爬取单家公司
-python main.py crawl -c "影视飓风" -o jobs.csv
+python main.py crawl -c "影视飓风"
 
 # 导出为 Excel 格式
-python main.py crawl -c "影视飓风" -o jobs.xlsx -f excel
+python main.py crawl -c "影视飓风" -f excel
 
 # 查看已保存的数据
-python main.py list jobs.csv
+python main.py list
 ```
+
+### 输出目录
+
+- **默认输出目录**: `./output/` 文件夹
+- **未指定文件名**: 自动生成带时间戳的文件名（如 `jobs_20260302_143025.csv`）
+- **自定义输出**: 使用 `-o` 指定文件名，使用 `-d` 指定目录
 
 ### 交互式菜单说明
 
@@ -101,11 +107,12 @@ job-harvester/
 
 ## 版本历史
 
-### v0.3.5 (当前版本)
+### v0.3.6 (当前版本)
 
-- ✅ **导出表格添加序号**：CSV 和 Excel 文件第一列添加序号
-- ✅ **进度显示增强**：显示页数/总页数、百分比、已获职位数、预计剩余时间
-- ✅ **Ctrl+C 中断保存**：爬取过程中按 Ctrl+C 可中断并自动保存已获取的数据
+- ✅ **默认输出目录**：新增 `output/` 文件夹作为默认输出目录
+- ✅ **list 命令增强**：默认读取 `output/` 目录下的最新文件
+
+### v0.3.5 (2026-03-02)
 
 ### v0.3.4 (2026-03-02)
 

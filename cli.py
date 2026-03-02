@@ -61,11 +61,17 @@ def _resolve_output_path(output: Optional[str], output_dir: Optional[str], forma
     # 确定扩展名
     ext = "xlsx" if format == "excel" else "csv"
 
+    # 获取项目根目录下的 output 文件夹
+    default_output_dir = Path(__file__).parent / "output"
+
     # 如果指定了完整路径，直接使用
     if output:
         # 如果只有文件名没有路径，且指定了 output_dir，则组合
         if not Path(output).is_absolute() and output_dir:
             output_path = Path(output_dir) / output
+        elif not Path(output).is_absolute() and not output_dir:
+            # 没有指定路径，使用默认 output 目录
+            output_path = default_output_dir / output
         else:
             output_path = Path(output)
 
@@ -84,7 +90,8 @@ def _resolve_output_path(output: Optional[str], output_dir: Optional[str], forma
     if output_dir:
         output_path = Path(output_dir) / filename
     else:
-        output_path = Path(filename)
+        # 默认使用 output 目录
+        output_path = default_output_dir / filename
 
     # 确保目录存在
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -502,11 +509,30 @@ def init_config():
 
 @app.command("list")
 def list_jobs(
-    filepath: str = typer.Argument("jobs*.csv", help="职位数据文件路径（支持通配符）"),
+    filepath: Optional[str] = typer.Argument(None, help="职位数据文件路径（支持通配符，默认读取 output 目录最新文件）"),
     limit: int = typer.Option(20, "-l", "--limit", help="显示条数（默认 20）"),
 ):
     """查看已保存的职位数据"""
     from glob import glob
+
+    # 默认 output 目录
+    default_output_dir = Path(__file__).parent / "output"
+
+    # 如果没有指定文件路径，从 output 目录查找最新文件
+    if filepath is None:
+        if not default_output_dir.exists():
+            typer.echo(f"output 目录不存在：{default_output_dir}")
+            typer.echo("请先爬取数据或指定文件路径")
+            raise typer.Exit(1)
+
+        files = glob(str(default_output_dir / "jobs*.csv")) + glob(str(default_output_dir / "jobs*.xlsx"))
+        if not files:
+            typer.echo(f"output 目录没有找到文件：{default_output_dir}")
+            raise typer.Exit(1)
+
+        # 使用最新的文件
+        filepath = max(files, key=lambda p: Path(p).stat().st_mtime)
+        typer.echo(f"使用最新文件：{filepath}")
 
     # 支持通配符
     if '*' in filepath:
