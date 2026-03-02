@@ -143,6 +143,7 @@ def _run_interactive_mode():
 
     all_jobs = []
     interrupted = False
+    max_pages = None  # 交互式模式默认不限制页数
 
     for idx, company_config in enumerate(selected, 1):
         name = company_config['name']
@@ -157,11 +158,14 @@ def _run_interactive_mode():
 
         try:
             if company_type == 'feishu':
-                jobs = asyncio.run(_crawl_company(name, domain, 'feishu', status_callback))
+                jobs = asyncio.run(_crawl_company(name, domain, 'feishu', status_callback, max_pages))
             elif company_type == 'bytedance':
-                jobs = asyncio.run(_crawl_company(name, domain, 'bytedance', status_callback))
+                jobs = asyncio.run(_crawl_company(name, domain, 'bytedance', status_callback, max_pages))
+            elif company_type == 'tencent':
+                jobs = asyncio.run(_crawl_company(name, domain, 'tencent', status_callback, max_pages))
             else:
-                jobs = asyncio.run(_crawl_company(name, domain, 'feishu', status_callback))
+                typer.echo(f"警告：未知的公司类型 {company_type}，使用飞书招聘")
+                jobs = asyncio.run(_crawl_company(name, domain, 'feishu', status_callback, max_pages))
 
             all_jobs.extend(jobs)
             _clear_status()
@@ -429,7 +433,10 @@ def _crawl_all_companies(output_path: str, format: str, max_pages: int = None):
                 jobs = asyncio.run(_crawl_company(name, domain, 'feishu', status_callback, max_pages))
             elif company_type == 'bytedance':
                 jobs = asyncio.run(_crawl_company(name, domain, 'bytedance', status_callback, max_pages))
+            elif company_type == 'tencent':
+                jobs = asyncio.run(_crawl_company(name, domain, 'tencent', status_callback, max_pages))
             else:
+                typer.echo(f"警告：未知的公司类型 {company_type}，使用飞书招聘")
                 jobs = asyncio.run(_crawl_company(name, domain, 'feishu', status_callback, max_pages))
 
             all_jobs.extend(jobs)
