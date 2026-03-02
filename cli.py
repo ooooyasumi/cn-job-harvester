@@ -61,8 +61,8 @@ def _resolve_output_path(output: Optional[str], output_dir: Optional[str], forma
     # 确定扩展名
     ext = "xlsx" if format == "excel" else "csv"
 
-    # 获取项目根目录下的 output 文件夹
-    default_output_dir = Path(__file__).parent / "output"
+    # 获取项目根目录（cli.py 所在目录）
+    project_root = Path(__file__).resolve().parent
 
     # 如果指定了完整路径，直接使用
     if output:
@@ -71,7 +71,7 @@ def _resolve_output_path(output: Optional[str], output_dir: Optional[str], forma
             output_path = Path(output_dir) / output
         elif not Path(output).is_absolute() and not output_dir:
             # 没有指定路径，使用默认 output 目录
-            output_path = default_output_dir / output
+            output_path = project_root / "output" / output
         else:
             output_path = Path(output)
 
@@ -91,7 +91,7 @@ def _resolve_output_path(output: Optional[str], output_dir: Optional[str], forma
         output_path = Path(output_dir) / filename
     else:
         # 默认使用 output 目录
-        output_path = default_output_dir / filename
+        output_path = project_root / "output" / filename
 
     # 确保目录存在
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -515,8 +515,9 @@ def list_jobs(
     """查看已保存的职位数据"""
     from glob import glob
 
-    # 默认 output 目录
-    default_output_dir = Path(__file__).parent / "output"
+    # 默认 output 目录（项目根目录下）
+    project_root = Path(__file__).resolve().parent
+    default_output_dir = project_root / "output"
 
     # 如果没有指定文件路径，从 output 目录查找最新文件
     if filepath is None:
