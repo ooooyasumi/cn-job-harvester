@@ -13,6 +13,7 @@ import sys
 from _version import __version__
 from scrapers.feishu import FeishuScraper
 from scrapers.bytedance import ByteDanceScraper
+from scrapers.tencent import TencentScraper
 from storage.csv_excel import JobStorage
 
 app = typer.Typer(help="JobHarvester - 招聘数据爬取工具", invoke_without_command=True)
@@ -457,9 +458,9 @@ async def _crawl_company(company_name: str, domain: str, company_type: str = 'fe
     Args:
         company_name: 公司名称
         domain: 域名
-        company_type: 爬虫类型（feishu/bytedance）
+        company_type: 爬虫类型（feishu/bytedance/tencent）
         status_callback: 状态回调函数
-        max_pages: 最大爬取页数（仅对字节跳动有效），None 表示爬取全部
+        max_pages: 最大爬取页数（仅对字节跳动/腾讯有效），None 表示爬取全部
     """
     if status_callback:
         status_callback(f"正在初始化爬虫...")
@@ -467,6 +468,8 @@ async def _crawl_company(company_name: str, domain: str, company_type: str = 'fe
 
     if company_type == 'bytedance':
         scraper = ByteDanceScraper(company_name, domain, status_callback, max_pages)
+    elif company_type == 'tencent':
+        scraper = TencentScraper(company_name, domain, status_callback, max_pages)
     else:
         scraper = FeishuScraper(company_name, domain, status_callback)
 

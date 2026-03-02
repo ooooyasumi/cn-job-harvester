@@ -8,3 +8,8 @@ companies:
     domain: jobs.bytedance.com
     type: bytedance
     enabled: true
+
+  - name: 腾讯
+    domain: join.qq.com
+    type: tencent
+    enabled: true
