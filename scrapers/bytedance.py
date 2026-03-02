@@ -3,6 +3,8 @@ import asyncio
 from typing import List, Dict, Any, Optional
 from playwright.async_api import async_playwright, Browser, Page
 from datetime import datetime
+import time
+import signal
 
 from .base import BaseScraper, Job
 
@@ -18,6 +20,12 @@ class ByteDanceScraper(BaseScraper):
         self._current_signature: str = ""
         self._status_callback = status_callback
         self._max_pages = max_pages  # None 表示爬取全部
+
+        # 进度追踪
+        self._current_page = 0
+        self._total_pages = 0
+        self._start_time = 0
+        self._jobs_collected: List[Job] = []  # 已爬取的职位数据（用于中断保存）
 
     async def _init_browser(self):
         """初始化浏览器"""
@@ -146,6 +154,11 @@ class ByteDanceScraper(BaseScraper):
         else:
             max_pages = total_pages  # 爬取全部
 
+        # 初始化进度追踪
+        self._total_pages = max_pages
+        self._current_page = 1
+        self._start_time = time.time()
+
         # 显示爬取计划
         if self._status_callback:
             self._status_callback(f"计划爬取 {max_pages} 页（约 {max_pages * 10} 个职位）...")
@@ -160,8 +173,23 @@ class ByteDanceScraper(BaseScraper):
                 self._status_callback(f"正在爬取第 {current_page + 1}-{batch_end} 页...")
 
             for page_num in range(current_page + 1, batch_end + 1):
+                # 计算进度信息
+                progress_percent = (page_num / max_pages) * 100
+                elapsed_time = time.time() - self._start_time
+                avg_time_per_page = elapsed_time / (page_num - 1) if page_num > 1 else 1.5
+                remaining_pages = max_pages - page_num
+                eta_seconds = remaining_pages * avg_time_per_page
+
+                # 格式化 ETA 时间
+                if eta_seconds < 60:
+                    eta_str = f"{int(eta_seconds)}秒"
+                elif eta_seconds < 3600:
+                    eta_str = f"{int(eta_seconds / 60)}分钟"
+                else:
+                    eta_str = f"{int(eta_seconds / 3600)}小时{int((eta_seconds % 3600) / 60)}分钟"
+
                 if self._status_callback:
-                    self._status_callback(f"第 {page_num}/{max_pages} 页")
+                    self._status_callback(f"进度：{page_num}/{max_pages} ({progress_percent:.1f}%) | 已获 {len(self._api_responses) * 10} 职位 | 预计剩余：{eta_str}")
 
                 clicked = await self._goto_page(page_num)
                 if not clicked:
@@ -169,6 +197,7 @@ class ByteDanceScraper(BaseScraper):
                         self._status_callback("无法翻到下一页")
                     break
 
+                self._current_page = page_num
                 await asyncio.sleep(1.5)  # 稍微减少等待时间
 
             current_page = batch_end

@@ -127,7 +127,11 @@ def _run_interactive_mode():
     if not output.endswith(('.csv', '.xlsx')):
         output += '.csv'
 
+    typer.echo("按 Ctrl+C 可中断爬取并保存已获取的数据")
+
     all_jobs = []
+    interrupted = False
+
     for idx, company_config in enumerate(selected, 1):
         name = company_config['name']
         domain = company_config['domain']
@@ -139,16 +143,21 @@ def _run_interactive_mode():
 
         typer.echo(f"\n正在爬取：{name} ({domain})")
 
-        if company_type == 'feishu':
-            jobs = asyncio.run(_crawl_company(name, domain, 'feishu', status_callback))
-        elif company_type == 'bytedance':
-            jobs = asyncio.run(_crawl_company(name, domain, 'bytedance', status_callback))
-        else:
-            jobs = asyncio.run(_crawl_company(name, domain, 'feishu', status_callback))
+        try:
+            if company_type == 'feishu':
+                jobs = asyncio.run(_crawl_company(name, domain, 'feishu', status_callback))
+            elif company_type == 'bytedance':
+                jobs = asyncio.run(_crawl_company(name, domain, 'bytedance', status_callback))
+            else:
+                jobs = asyncio.run(_crawl_company(name, domain, 'feishu', status_callback))
 
-        all_jobs.extend(jobs)
-        _clear_status()
-        typer.echo(f"  爬取到 {len(jobs)} 个职位")
+            all_jobs.extend(jobs)
+            _clear_status()
+            typer.echo(f"  爬取到 {len(jobs)} 个职位")
+        except KeyboardInterrupt:
+            typer.echo("\n\n检测到 Ctrl+C 中断")
+            interrupted = True
+            break
 
     if all_jobs:
         fmt = 'excel' if output.endswith('.xlsx') else 'csv'
@@ -156,6 +165,9 @@ def _run_interactive_mode():
         typer.echo(f"\n已保存 {len(all_jobs)} 个职位到 {output}")
     else:
         typer.echo("\n未爬取到任何职位数据")
+
+    if interrupted:
+        raise typer.Exit(0)
 
 
 def _load_companies() -> List[dict]:
@@ -218,6 +230,7 @@ def run(
     output_dir: Optional[str] = typer.Option(None, "-d", "--dir", help="输出目录（默认：当前目录）"),
     format: str = typer.Option("csv", "-f", "--format", help="输出格式：csv 或 excel"),
     interactive: bool = typer.Option(False, "-i", "--interactive", help="交互式选择公司"),
+    max_pages: Optional[int] = typer.Option(None, "--max-pages", "-p", help="最大爬取页数（仅对字节跳动有效）"),
 ):
     """
     快速爬取模式 - 无需交互即可开始
@@ -252,13 +265,14 @@ def run(
 
     # 爬取所有公司
     if all_companies:
-        _crawl_all_companies(output_path, format)
+        _crawl_all_companies(output_path, format, max_pages)
 
 
 @app.command("quick")
 def quick(
     output_dir: Optional[str] = typer.Option(None, "-d", "--dir", help="输出目录（默认：当前目录）"),
     format: str = typer.Option("csv", "-f", "--format", help="输出格式：csv 或 excel"),
+    max_pages: Optional[int] = typer.Option(None, "--max-pages", "-p", help="最大爬取页数（仅对字节跳动有效）"),
 ):
     """
     一键爬取 - 最快速的爬取方式，爬取所有启用的公司
@@ -269,9 +283,12 @@ def quick(
 
         # 输出到指定目录
         python main.py quick -d ./data
+
+        # 限制字节跳动爬取页数
+        python main.py quick --max-pages 200
     """
     output_path = _resolve_output_path(None, output_dir, format)
-    _crawl_all_companies(output_path, format)
+    _crawl_all_companies(output_path, format, max_pages)
 
 
 @app.command("crawl")
@@ -318,7 +335,7 @@ def crawl(
         all_companies = True  # 设置为全选模式处理
 
     if all_companies:
-        _crawl_all_companies(output_path, format)
+        _crawl_all_companies(output_path, format, max_pages)
 
     elif company:
         # 爬取单家公司
@@ -341,14 +358,19 @@ def crawl(
             domain = f"{company}.jobs.feishu.cn"
 
         typer.echo(f"正在爬取：{company} ({domain})")
+        typer.echo("按 Ctrl+C 可中断爬取并保存已获取的数据")
 
         # 定义状态回调
         def status_callback(msg):
             _print_status(f"{company}: {msg}")
 
-        jobs = asyncio.run(_crawl_company(company, domain, company_type, status_callback, max_pages))
-        _clear_status()
-        typer.echo(f"爬取到 {len(jobs)} 个职位")
+        try:
+            jobs = asyncio.run(_crawl_company(company, domain, company_type, status_callback, max_pages))
+            _clear_status()
+            typer.echo(f"\n爬取到 {len(jobs)} 个职位")
+        except KeyboardInterrupt:
+            typer.echo("\n\n检测到 Ctrl+C 中断")
+            jobs = []  # 中断时可能没有返回值
 
         if jobs:
             JobStorage.save(jobs, output_path, format)
@@ -357,7 +379,7 @@ def crawl(
             typer.echo("未爬取到任何职位数据")
 
 
-def _crawl_all_companies(output_path: str, format: str):
+def _crawl_all_companies(output_path: str, format: str, max_pages: int = None):
     """爬取所有配置的公司"""
     config_path = Path(__file__).parent / "config" / "companies.yaml"
     if not config_path.exists():
@@ -374,8 +396,11 @@ def _crawl_all_companies(output_path: str, format: str):
         raise typer.Exit(1)
 
     typer.echo(f"发现 {len(companies)} 家启用的公司")
+    typer.echo("按 Ctrl+C 可中断爬取并保存已获取的数据")
 
     all_jobs = []
+    interrupted = False
+
     for idx, company_config in enumerate(companies, 1):
         name = company_config['name']
         domain = company_config['domain']
@@ -387,24 +412,32 @@ def _crawl_all_companies(output_path: str, format: str):
 
         typer.echo(f"\n正在爬取：{name} ({domain})")
 
-        if company_type == 'feishu':
-            jobs = asyncio.run(_crawl_company(name, domain, 'feishu', status_callback))
-        elif company_type == 'bytedance':
-            jobs = asyncio.run(_crawl_company(name, domain, 'bytedance', status_callback))
-        else:
-            jobs = asyncio.run(_crawl_company(name, domain, 'feishu', status_callback))
+        try:
+            if company_type == 'feishu':
+                jobs = asyncio.run(_crawl_company(name, domain, 'feishu', status_callback, max_pages))
+            elif company_type == 'bytedance':
+                jobs = asyncio.run(_crawl_company(name, domain, 'bytedance', status_callback, max_pages))
+            else:
+                jobs = asyncio.run(_crawl_company(name, domain, 'feishu', status_callback, max_pages))
 
-        all_jobs.extend(jobs)
-        typer.echo(f"  爬取到 {len(jobs)} 个职位")
+            all_jobs.extend(jobs)
+            typer.echo(f"  爬取到 {len(jobs)} 个职位")
+        except KeyboardInterrupt:
+            typer.echo("\n\n检测到 Ctrl+C 中断")
+            interrupted = True
+            break
 
     _clear_status()
 
-    # 保存所有数据
+    # 保存所有数据（包括中断前的数据）
     if all_jobs:
         JobStorage.save(all_jobs, output_path, format)
         typer.echo(f"\n已保存 {len(all_jobs)} 个职位到 {output_path}")
     else:
         typer.echo("\n未爬取到任何职位数据")
+
+    if interrupted:
+        raise typer.Exit(0)
 
 
 async def _crawl_company(company_name: str, domain: str, company_type: str = 'feishu', status_callback=None, max_pages: int = None):
