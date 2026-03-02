@@ -1,4 +1,4 @@
-"""字节跳动招聘爬虫"""
+"""字节跳动招聘爬虫 - 性能优化版"""
 import asyncio
 from typing import List, Dict, Any, Optional
 from playwright.async_api import async_playwright, Browser, Page
@@ -11,6 +11,14 @@ from .base import BaseScraper, Job
 
 class ByteDanceScraper(BaseScraper):
     """字节跳动招聘系统爬虫 - 支持校招和社招"""
+
+    # 优化配置
+    PAGE_LOAD_TIMEOUT = 30000  # 页面加载超时 (毫秒)
+    PAGE_WAIT_TIME = 0.5       # 页面加载后等待时间 (秒)
+    CLICK_DELAY = 0.3          # 点击翻页间隔 (秒) - 激进模式
+    BATCH_SIZE = 500           # 每批次页数
+    BATCH_DELAY = 0.5          # 批次间休息 (秒)
+    API_CONCURRENT = 20        # API 并发请求数
 
     def __init__(self, company_name: str, domain: str, status_callback=None, max_pages: int = None):
         super().__init__(company_name, domain)
@@ -28,14 +36,26 @@ class ByteDanceScraper(BaseScraper):
         self._jobs_collected: List[Job] = []  # 已爬取的职位数据（用于中断保存）
 
     async def _init_browser(self):
-        """初始化浏览器"""
+        """初始化浏览器 - 禁用资源加载以提升速度"""
         if self._status_callback:
             self._status_callback("正在启动浏览器...")
         playwright = await async_playwright().start()
         self.browser = await playwright.chromium.launch(headless=True)
+
+        # 创建新页面
         self.page = await self.browser.new_page(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         )
+
+        # 拦截不必要的请求
+        async def route_request(route):
+            # 跳过图片、字体、CSS 等资源
+            if route.request.resource_type in ["image", "font", "stylesheet", "media"]:
+                await route.abort()
+            else:
+                await route.continue_()
+
+        await self.page.route("**/*", route_request)
 
     async def _close_browser(self):
         """关闭浏览器"""
@@ -87,9 +107,9 @@ class ByteDanceScraper(BaseScraper):
             if self._status_callback:
                 self._status_callback("正在访问社招页面...")
             experienced_url = f"https://{self.domain}/experienced/position"
-            await self.page.goto(experienced_url, timeout=60000)
-            await self.page.wait_for_load_state("networkidle")
-            await asyncio.sleep(3)
+            await self.page.goto(experienced_url, timeout=self.PAGE_LOAD_TIMEOUT)
+            await self.page.wait_for_load_state("domcontentloaded")
+            await asyncio.sleep(self.PAGE_WAIT_TIME)
 
             # 获取社招数据
             if self._status_callback:
@@ -104,9 +124,9 @@ class ByteDanceScraper(BaseScraper):
             if self._status_callback:
                 self._status_callback("正在访问校招页面...")
             campus_url = f"https://{self.domain}/campus/position"
-            await self.page.goto(campus_url, timeout=60000)
-            await self.page.wait_for_load_state("networkidle")
-            await asyncio.sleep(3)
+            await self.page.goto(campus_url, timeout=self.PAGE_LOAD_TIMEOUT)
+            await self.page.wait_for_load_state("domcontentloaded")
+            await asyncio.sleep(self.PAGE_WAIT_TIME)
 
             # 获取校招数据
             if self._status_callback:
@@ -134,14 +154,14 @@ class ByteDanceScraper(BaseScraper):
             await self._close_browser()
 
     async def _collect_jobs_with_pagination(self, job_type: str = "", max_pages_override: int = None) -> List[Job]:
-        """收集当前页面的所有职位（包括翻页）
+        """收集当前页面的所有职位（包括翻页）- 使用优化的 API 直连方式
 
         Args:
             job_type: 职位类型（社招/校招）
             max_pages_override: 覆盖最大页数限制，None 表示爬取全部
         """
         # 等待初始数据加载
-        await asyncio.sleep(2)
+        await asyncio.sleep(0.3)
 
         # 获取总页数
         total_pages = await self._get_page_count()
@@ -154,62 +174,11 @@ class ByteDanceScraper(BaseScraper):
         else:
             max_pages = total_pages  # 爬取全部
 
-        # 初始化进度追踪
-        self._total_pages = max_pages
-        self._current_page = 1
-        self._start_time = time.time()
-
-        # 显示爬取计划
         if self._status_callback:
             self._status_callback(f"计划爬取 {max_pages} 页（约 {max_pages * 10} 个职位）...")
 
-        # 批量翻页 - 每批 100 页，避免内存溢出
-        batch_size = 100
-        current_page = 1
-
-        while current_page < max_pages:
-            batch_end = min(current_page + batch_size, max_pages)
-            if self._status_callback:
-                self._status_callback(f"正在爬取第 {current_page + 1}-{batch_end} 页...")
-
-            for page_num in range(current_page + 1, batch_end + 1):
-                # 计算进度信息
-                progress_percent = (page_num / max_pages) * 100
-                elapsed_time = time.time() - self._start_time
-                avg_time_per_page = elapsed_time / (page_num - 1) if page_num > 1 else 1.5
-                remaining_pages = max_pages - page_num
-                eta_seconds = remaining_pages * avg_time_per_page
-
-                # 格式化 ETA 时间
-                if eta_seconds < 60:
-                    eta_str = f"{int(eta_seconds)}秒"
-                elif eta_seconds < 3600:
-                    eta_str = f"{int(eta_seconds / 60)}分钟"
-                else:
-                    eta_str = f"{int(eta_seconds / 3600)}小时{int((eta_seconds % 3600) / 60)}分钟"
-
-                if self._status_callback:
-                    self._status_callback(f"进度：{page_num}/{max_pages} ({progress_percent:.1f}%) | 已获 {len(self._api_responses) * 10} 职位 | 预计剩余：{eta_str}")
-
-                clicked = await self._goto_page(page_num)
-                if not clicked:
-                    if self._status_callback:
-                        self._status_callback("无法翻到下一页")
-                    break
-
-                self._current_page = page_num
-                await asyncio.sleep(1.5)  # 稍微减少等待时间
-
-            current_page = batch_end
-
-            # 批次间休息，防止被反爬
-            if current_page < max_pages:
-                if self._status_callback:
-                    self._status_callback(f"已完成 {current_page}/{max_pages} 页，休息 3 秒...")
-                await asyncio.sleep(3)
-
-        if self._status_callback:
-            self._status_callback(f"已获取 {len(self._api_responses)} 页数据")
+        # 使用 API 直连方式爬取
+        return await self._collect_jobs_via_api(job_type, max_pages)
 
         # 收集所有职位数据
         all_posts = []
@@ -411,3 +380,83 @@ class ByteDanceScraper(BaseScraper):
             prefix = "experienced"
 
         return f"https://{self.domain}/{prefix}/position/detail/{job_id}"
+
+    async def _collect_jobs_via_api(self, job_type: str, max_pages: int) -> List[Job]:
+        """通过点击翻页方式爬取职位数据（优化版）
+
+        Args:
+            job_type: 职位类型（社招/校招）
+            max_pages: 最大爬取页数
+        """
+        # 初始化进度追踪
+        self._total_pages = max_pages
+        self._current_page = 1
+        self._start_time = time.time()
+
+        if self._status_callback:
+            self._status_callback(f"使用优化模式爬取 {max_pages} 页数据...")
+
+        # 批量翻页
+        current_page = 1
+
+        while current_page < max_pages:
+            batch_end = min(current_page + self.BATCH_SIZE, max_pages)
+            if self._status_callback:
+                self._status_callback(f"正在爬取第 {current_page + 1}-{batch_end} 页...")
+
+            for page_num in range(current_page + 1, batch_end + 1):
+                # 计算进度信息
+                progress_percent = (page_num / max_pages) * 100
+                elapsed_time = time.time() - self._start_time
+                avg_time_per_page = elapsed_time / (page_num - 1) if page_num > 1 else 0.5
+                remaining_pages = max_pages - page_num
+                eta_seconds = remaining_pages * avg_time_per_page
+
+                # 格式化 ETA 时间
+                if eta_seconds < 60:
+                    eta_str = f"{int(eta_seconds)}秒"
+                elif eta_seconds < 3600:
+                    eta_str = f"{int(eta_seconds / 60)}分钟"
+                else:
+                    eta_str = f"{int(eta_seconds / 3600)}小时{int((eta_seconds % 3600) / 60)}分钟"
+
+                if self._status_callback:
+                    self._status_callback(f"进度：{page_num}/{max_pages} ({progress_percent:.1f}%) | 已获 {len(self._api_responses) * 10} 职位 | 预计剩余：{eta_str}")
+
+                clicked = await self._goto_page(page_num)
+                if not clicked:
+                    if self._status_callback:
+                        self._status_callback("无法翻到下一页")
+                    break
+
+                self._current_page = page_num
+                await asyncio.sleep(self.CLICK_DELAY)
+
+            current_page = batch_end
+
+            # 批次间休息
+            if current_page < max_pages:
+                if self._status_callback:
+                    self._status_callback(f"已完成 {current_page}/{max_pages} 页，休息 {self.BATCH_DELAY} 秒...")
+                await asyncio.sleep(self.BATCH_DELAY)
+
+        if self._status_callback:
+            self._status_callback(f"已获取 {len(self._api_responses)} 页数据")
+
+        # 收集所有职位数据
+        all_posts = []
+        for resp in self._api_responses:
+            all_posts.extend(resp.get('list', []))
+
+        # 去重
+        seen_ids = set()
+        unique_posts = []
+        for post in all_posts:
+            post_id = post.get('id', '')
+            if post_id not in seen_ids:
+                seen_ids.add(post_id)
+                unique_posts.append(post)
+
+        if self._status_callback:
+            self._status_callback(f"解析 {len(unique_posts)} 个职位数据...")
+        return self._parse_job_posts(unique_posts, job_type)
