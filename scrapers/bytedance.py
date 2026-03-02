@@ -10,15 +10,19 @@ from .base import BaseScraper, Job
 class ByteDanceScraper(BaseScraper):
     """字节跳动招聘系统爬虫 - 支持校招和社招"""
 
-    def __init__(self, company_name: str, domain: str):
+    def __init__(self, company_name: str, domain: str, status_callback=None, max_pages: int = None):
         super().__init__(company_name, domain)
         self.browser: Browser = None
         self.page: Page = None
         self._api_responses: List[Dict] = []
         self._current_signature: str = ""
+        self._status_callback = status_callback
+        self._max_pages = max_pages  # None 表示爬取全部
 
     async def _init_browser(self):
         """初始化浏览器"""
+        if self._status_callback:
+            self._status_callback("正在启动浏览器...")
         playwright = await async_playwright().start()
         self.browser = await playwright.chromium.launch(headless=True)
         self.page = await self.browser.new_page(
@@ -72,26 +76,39 @@ class ByteDanceScraper(BaseScraper):
             all_jobs = []
 
             # 爬取社招数据
+            if self._status_callback:
+                self._status_callback("正在访问社招页面...")
             experienced_url = f"https://{self.domain}/experienced/position"
             await self.page.goto(experienced_url, timeout=60000)
             await self.page.wait_for_load_state("networkidle")
             await asyncio.sleep(3)
 
             # 获取社招数据
-            jobs = await self._collect_jobs_with_pagination()
+            if self._status_callback:
+                self._status_callback("正在获取社招职位数据...")
+            jobs = await self._collect_jobs_with_pagination("社招", self._max_pages)
             all_jobs.extend(jobs)
 
+            # 清空 API 响应列表，准备爬取校招
+            self._api_responses = []
+
             # 爬取校招数据
+            if self._status_callback:
+                self._status_callback("正在访问校招页面...")
             campus_url = f"https://{self.domain}/campus/position"
             await self.page.goto(campus_url, timeout=60000)
             await self.page.wait_for_load_state("networkidle")
             await asyncio.sleep(3)
 
             # 获取校招数据
-            campus_jobs = await self._collect_jobs_with_pagination()
+            if self._status_callback:
+                self._status_callback("正在获取校招职位数据...")
+            campus_jobs = await self._collect_jobs_with_pagination("校招", self._max_pages)
             all_jobs.extend(campus_jobs)
 
             # 去重（按职位 ID）
+            if self._status_callback:
+                self._status_callback("正在处理职位数据...")
             seen_ids = set()
             unique_jobs = []
             for job in all_jobs:
@@ -101,29 +118,69 @@ class ByteDanceScraper(BaseScraper):
                     seen_ids.add(job_key)
                     unique_jobs.append(job)
 
+            if self._status_callback:
+                self._status_callback(f"爬取完成，共 {len(unique_jobs)} 个职位")
             return unique_jobs
 
         finally:
             await self._close_browser()
 
-    async def _collect_jobs_with_pagination(self) -> List[Job]:
-        """收集当前页面的所有职位（包括翻页）"""
-        initial_count = len(self._api_responses)
+    async def _collect_jobs_with_pagination(self, job_type: str = "", max_pages_override: int = None) -> List[Job]:
+        """收集当前页面的所有职位（包括翻页）
 
+        Args:
+            job_type: 职位类型（社招/校招）
+            max_pages_override: 覆盖最大页数限制，None 表示爬取全部
+        """
         # 等待初始数据加载
         await asyncio.sleep(2)
 
-        # 尝试翻页
-        for page_num in range(2, 11):  # 最多翻 10 页
-            clicked = await self._goto_next_page()
-            if not clicked:
-                break
+        # 获取总页数
+        total_pages = await self._get_page_count()
+        if self._status_callback:
+            self._status_callback(f"检测到 {total_pages} 页数据")
 
-            await asyncio.sleep(2)
+        # 确定最大页数
+        if max_pages_override is not None:
+            max_pages = min(total_pages, max_pages_override)
+        else:
+            max_pages = total_pages  # 爬取全部
 
-            # 检查是否有新数据
-            if len(self._api_responses) <= initial_count:
-                break
+        # 显示爬取计划
+        if self._status_callback:
+            self._status_callback(f"计划爬取 {max_pages} 页（约 {max_pages * 10} 个职位）...")
+
+        # 批量翻页 - 每批 100 页，避免内存溢出
+        batch_size = 100
+        current_page = 1
+
+        while current_page < max_pages:
+            batch_end = min(current_page + batch_size, max_pages)
+            if self._status_callback:
+                self._status_callback(f"正在爬取第 {current_page + 1}-{batch_end} 页...")
+
+            for page_num in range(current_page + 1, batch_end + 1):
+                if self._status_callback:
+                    self._status_callback(f"第 {page_num}/{max_pages} 页")
+
+                clicked = await self._goto_page(page_num)
+                if not clicked:
+                    if self._status_callback:
+                        self._status_callback("无法翻到下一页")
+                    break
+
+                await asyncio.sleep(1.5)  # 稍微减少等待时间
+
+            current_page = batch_end
+
+            # 批次间休息，防止被反爬
+            if current_page < max_pages:
+                if self._status_callback:
+                    self._status_callback(f"已完成 {current_page}/{max_pages} 页，休息 3 秒...")
+                await asyncio.sleep(3)
+
+        if self._status_callback:
+            self._status_callback(f"已获取 {len(self._api_responses)} 页数据")
 
         # 收集所有职位数据
         all_posts = []
@@ -139,36 +196,94 @@ class ByteDanceScraper(BaseScraper):
                 seen_ids.add(post_id)
                 unique_posts.append(post)
 
-        return self._parse_job_posts(unique_posts)
+        if self._status_callback:
+            self._status_callback(f"解析 {len(unique_posts)} 个职位数据...")
+        return self._parse_job_posts(unique_posts, job_type)
 
-    async def _goto_next_page(self) -> bool:
-        """点击下一页"""
+    async def _get_page_count(self) -> int:
+        """获取总页数"""
         return await self.page.evaluate("""() => {
-            // 查找下一页按钮
-            const buttons = Array.from(document.querySelectorAll('button, [role="button"], a'))
-            for (let btn of buttons) {
-                const text = (btn.innerText || btn.textContent || btn.getAttribute('aria-label') || '').trim()
-                if (text === '下一页' || text === '›' || text === '>' || text === 'Next') {
-                    // 检查是否禁用
-                    if (btn.hasAttribute('disabled') || btn.getAttribute('aria-disabled') === 'true') {
-                        return false
+            // 查找最后一个页码
+            const items = document.querySelectorAll('.atsx-pagination-item');
+            let maxPage = 1;
+            for (let item of items) {
+                const text = item.innerText.trim();
+                if (/^\d+$/.test(text)) {
+                    const pageNum = parseInt(text);
+                    if (pageNum > maxPage) {
+                        maxPage = pageNum;
                     }
-                    btn.click()
-                    return true
                 }
             }
-            // 尝试点击页码
-            for (let btn of buttons) {
-                const text = (btn.innerText || btn.textContent || '').trim()
-                if (/^\d+$/.test(text) && text !== '1') {
-                    btn.click()
-                    return true
-                }
-            }
-            return false
+            return maxPage;
         }""")
 
-    def _parse_job_posts(self, job_post_list: List[Dict]) -> List[Job]:
+    async def _goto_page(self, page_num: int) -> bool:
+        """翻到指定页"""
+        return await self.page.evaluate("""(pageNum) => {
+            // 查找对应的页码项
+            const item = document.querySelector('.atsx-pagination-item-' + pageNum);
+            if (item) {
+                item.click();
+                return true;
+            }
+
+            // 如果找不到直接页码，尝试点击"下一页"
+            if (pageNum > 1) {
+                const buttons = Array.from(document.querySelectorAll('button, [role="button"], a'));
+                for (let btn of buttons) {
+                    const text = (btn.innerText || btn.textContent || '').trim();
+                    if (text === '下一页' || text === '>' || text === '›') {
+                        if (!btn.disabled && btn.getAttribute('aria-disabled') !== 'true') {
+                            btn.click();
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }""", page_num)
+
+    async def _goto_next_page(self) -> bool:
+        """点击下一页（兼容方法）"""
+        return await self.page.evaluate("""() => {
+            // 查找所有页码项
+            const items = document.querySelectorAll('.atsx-pagination-item');
+            let currentPage = 1;
+            let nextItem = null;
+
+            for (let item of items) {
+                const text = item.innerText.trim();
+                if (/^\d+$/.test(text)) {
+                    const isActive = item.classList.contains('atsx-pagination-item-active');
+                    if (isActive) {
+                        currentPage = parseInt(text);
+                    } else if (parseInt(text) === currentPage + 1) {
+                        nextItem = item;
+                    }
+                }
+            }
+
+            if (nextItem) {
+                nextItem.click();
+                return true;
+            }
+
+            // 尝试"下一页"按钮
+            const buttons = Array.from(document.querySelectorAll('button, [role="button"], a'));
+            for (let btn of buttons) {
+                const text = (btn.innerText || btn.textContent || '').trim();
+                if (text === '下一页' || text === '>' || text === '›') {
+                    if (!btn.disabled && btn.getAttribute('aria-disabled') !== 'true') {
+                        btn.click();
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }""")
+
+    def _parse_job_posts(self, job_post_list: List[Dict], job_type: str = "") -> List[Job]:
         """解析 API 返回的职位数据"""
         jobs = []
 
@@ -198,21 +313,25 @@ class ByteDanceScraper(BaseScraper):
             else:
                 location = ''
 
-            # 职位类型
-            recruit_type = post.get('recruit_type', {}) or {}
-            job_type = recruit_type.get('name', '')
+            # 职位类型：优先使用传入的类型参数
+            if job_type:
+                final_job_type = job_type
+            else:
+                # 如果没有传入类型，从 API 数据中获取
+                recruit_type = post.get('recruit_type', {}) or {}
+                final_job_type = recruit_type.get('name', '')
 
-            # 如果当前类型是"正式"，检查 parent
-            if job_type == '正式':
-                parent = recruit_type.get('parent', {})
-                if parent:
-                    parent_name = parent.get('name', '')
-                    if parent_name in ['社招', '校招', '实习']:
-                        job_type = parent_name
+                # 如果当前类型是"正式"，检查 parent
+                if final_job_type == '正式':
+                    parent = recruit_type.get('parent', {})
+                    if parent:
+                        parent_name = parent.get('name', '')
+                        if parent_name in ['社招', '校招', '实习']:
+                            final_job_type = parent_name
 
-            # 如果还是没有获取到，根据 portal_type 判断
-            if not job_type:
-                job_type = '社招'  # 默认
+                # 如果还是没有获取到，根据 portal_type 判断
+                if not final_job_type:
+                    final_job_type = '社招'  # 默认
 
             # 发布时间
             publish_time = post.get('publish_time', 0)
@@ -226,7 +345,7 @@ class ByteDanceScraper(BaseScraper):
 
             # 职位 ID 和链接
             job_id = post.get('id', '')
-            url = self.get_job_url(job_id)
+            url = self.get_job_url(job_id, job_type)
 
             # 合并描述和要求
             full_description = ""
@@ -242,7 +361,7 @@ class ByteDanceScraper(BaseScraper):
                 company=self.company_name,
                 salary=salary,
                 location=location,
-                job_type=job_type,
+                job_type=final_job_type,
                 description=full_description,
                 url=url,
                 published_date=published_date
@@ -251,8 +370,15 @@ class ByteDanceScraper(BaseScraper):
 
         return jobs
 
-    def get_job_url(self, job_id: str = "") -> str:
+    def get_job_url(self, job_id: str = "", job_type: str = "") -> str:
         """获取职位投递链接"""
-        if job_id:
-            return f"https://{self.domain}/position/detail/{job_id}"
-        return f"https://{self.domain}/position/"
+        if not job_id:
+            return f"https://{self.domain}/position/"
+
+        # 根据职位类型确定路径前缀
+        if job_type == "校招" or "实习" in job_type:
+            prefix = "campus"
+        else:
+            prefix = "experienced"
+
+        return f"https://{self.domain}/{prefix}/position/detail/{job_id}"

@@ -8,12 +8,36 @@ from pathlib import Path
 from typing import Optional, List
 from contextlib import contextmanager
 from datetime import datetime
+import sys
 
+from _version import __version__
 from scrapers.feishu import FeishuScraper
 from scrapers.bytedance import ByteDanceScraper
 from storage.csv_excel import JobStorage
 
 app = typer.Typer(help="JobHarvester - 招聘数据爬取工具", invoke_without_command=True)
+
+
+@app.command("version")
+def version():
+    """显示版本号"""
+    typer.echo(f"JobHarvester v{__version__}")
+
+# 全局状态显示变量
+_status_line = 0
+
+
+def _print_status(message: str):
+    """在命令行底部打印状态信息（使用回车符覆盖）"""
+    # 使用 \r 覆盖当前行，\033[K 清除到行尾
+    sys.stdout.write(f"\r\033[K{message}")
+    sys.stdout.flush()
+
+
+def _clear_status():
+    """清除状态行"""
+    sys.stdout.write("\r\033[K")
+    sys.stdout.flush()
 
 
 @contextmanager
@@ -104,21 +128,26 @@ def _run_interactive_mode():
         output += '.csv'
 
     all_jobs = []
-    for company_config in selected:
+    for idx, company_config in enumerate(selected, 1):
         name = company_config['name']
         domain = company_config['domain']
         company_type = company_config.get('type', 'feishu')
 
+        # 定义状态回调
+        def status_callback(msg, company=name, co=idx, total=len(selected)):
+            _print_status(f"[{co}/{total}] {company}: {msg}")
+
         typer.echo(f"\n正在爬取：{name} ({domain})")
 
         if company_type == 'feishu':
-            jobs = asyncio.run(_crawl_company(name, domain, 'feishu'))
+            jobs = asyncio.run(_crawl_company(name, domain, 'feishu', status_callback))
         elif company_type == 'bytedance':
-            jobs = asyncio.run(_crawl_company(name, domain, 'bytedance'))
+            jobs = asyncio.run(_crawl_company(name, domain, 'bytedance', status_callback))
         else:
-            jobs = asyncio.run(_crawl_company(name, domain, 'feishu'))
+            jobs = asyncio.run(_crawl_company(name, domain, 'feishu', status_callback))
 
         all_jobs.extend(jobs)
+        _clear_status()
         typer.echo(f"  爬取到 {len(jobs)} 个职位")
 
     if all_jobs:
@@ -253,6 +282,7 @@ def crawl(
     output_dir: Optional[str] = typer.Option(None, "-d", "--dir", help="输出目录"),
     format: str = typer.Option("csv", "-f", "--format", help="输出格式：csv 或 excel"),
     interactive: bool = typer.Option(False, "-i", "--interactive", help="交互式选择公司"),
+    max_pages: Optional[int] = typer.Option(None, "--max-pages", "-p", help="最大爬取页数（仅对字节跳动有效，默认爬取全部）"),
 ):
     """
     爬取招聘职位 - 灵活的爬取命令
@@ -272,6 +302,9 @@ def crawl(
 
         # 交互式选择
         python main.py crawl -i
+
+        # 爬取字节跳动，限制 200 页
+        python main.py crawl -c "字节跳动" --max-pages 200
     """
     # 构建输出路径
     output_path = _resolve_output_path(output, output_dir, format)
@@ -308,7 +341,13 @@ def crawl(
             domain = f"{company}.jobs.feishu.cn"
 
         typer.echo(f"正在爬取：{company} ({domain})")
-        jobs = asyncio.run(_crawl_company(company, domain, company_type))
+
+        # 定义状态回调
+        def status_callback(msg):
+            _print_status(f"{company}: {msg}")
+
+        jobs = asyncio.run(_crawl_company(company, domain, company_type, status_callback, max_pages))
+        _clear_status()
         typer.echo(f"爬取到 {len(jobs)} 个职位")
 
         if jobs:
@@ -337,22 +376,28 @@ def _crawl_all_companies(output_path: str, format: str):
     typer.echo(f"发现 {len(companies)} 家启用的公司")
 
     all_jobs = []
-    for company_config in companies:
+    for idx, company_config in enumerate(companies, 1):
         name = company_config['name']
         domain = company_config['domain']
         company_type = company_config.get('type', 'feishu')
 
+        # 定义状态回调
+        def status_callback(msg, company=name, co=idx, total=len(companies)):
+            _print_status(f"[{co}/{total}] {company}: {msg}")
+
         typer.echo(f"\n正在爬取：{name} ({domain})")
 
         if company_type == 'feishu':
-            jobs = asyncio.run(_crawl_company(name, domain, 'feishu'))
+            jobs = asyncio.run(_crawl_company(name, domain, 'feishu', status_callback))
         elif company_type == 'bytedance':
-            jobs = asyncio.run(_crawl_company(name, domain, 'bytedance'))
+            jobs = asyncio.run(_crawl_company(name, domain, 'bytedance', status_callback))
         else:
-            jobs = asyncio.run(_crawl_company(name, domain, 'feishu'))
+            jobs = asyncio.run(_crawl_company(name, domain, 'feishu', status_callback))
 
         all_jobs.extend(jobs)
         typer.echo(f"  爬取到 {len(jobs)} 个职位")
+
+    _clear_status()
 
     # 保存所有数据
     if all_jobs:
@@ -362,13 +407,35 @@ def _crawl_all_companies(output_path: str, format: str):
         typer.echo("\n未爬取到任何职位数据")
 
 
-async def _crawl_company(company_name: str, domain: str, company_type: str = 'feishu'):
-    """爬取单家公司的职位"""
+async def _crawl_company(company_name: str, domain: str, company_type: str = 'feishu', status_callback=None, max_pages: int = None):
+    """爬取单家公司的职位
+
+    Args:
+        company_name: 公司名称
+        domain: 域名
+        company_type: 爬虫类型（feishu/bytedance）
+        status_callback: 状态回调函数
+        max_pages: 最大爬取页数（仅对字节跳动有效），None 表示爬取全部
+    """
+    if status_callback:
+        status_callback(f"正在初始化爬虫...")
+        await asyncio.sleep(0.1)
+
     if company_type == 'bytedance':
-        scraper = ByteDanceScraper(company_name, domain)
+        scraper = ByteDanceScraper(company_name, domain, status_callback, max_pages)
     else:
-        scraper = FeishuScraper(company_name, domain)
-    return await scraper.scrape()
+        scraper = FeishuScraper(company_name, domain, status_callback)
+
+    if status_callback:
+        status_callback(f"正在爬取职位数据...")
+
+    jobs = await scraper.scrape()
+
+    if status_callback:
+        status_callback(f"爬取完成，共 {len(jobs)} 个职位")
+        await asyncio.sleep(0.3)
+
+    return jobs
 
 
 @app.command("init")

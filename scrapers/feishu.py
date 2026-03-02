@@ -10,15 +10,18 @@ from .base import BaseScraper, Job
 class FeishuScraper(BaseScraper):
     """飞书招聘系统爬虫 - 使用 API 获取数据"""
 
-    def __init__(self, company_name: str, domain: str):
+    def __init__(self, company_name: str, domain: str, status_callback=None):
         super().__init__(company_name, domain)
         self.browser: Browser = None
         self.page: Page = None
         self._company_name_from_page: str = ""
         self._api_responses: List[Dict] = []
+        self._status_callback = status_callback
 
     async def _init_browser(self):
         """初始化浏览器"""
+        if self._status_callback:
+            self._status_callback("正在启动浏览器...")
         playwright = await async_playwright().start()
         self.browser = await playwright.chromium.launch(headless=True)
         self.page = await self.browser.new_page(
@@ -78,6 +81,8 @@ class FeishuScraper(BaseScraper):
 
         try:
             # 访问首页
+            if self._status_callback:
+                self._status_callback("正在访问招聘首页...")
             url = f"https://{self.domain}/index/"
             await self.page.goto(url, timeout=60000)
             await self.page.wait_for_load_state("networkidle")
@@ -92,19 +97,27 @@ class FeishuScraper(BaseScraper):
                 all_posts.extend(resp.get('list', []))
 
             if not all_posts:
+                if self._status_callback:
+                    self._status_callback("API 获取失败，尝试从页面提取...")
                 print("未能通过 API 获取数据，尝试从页面提取...")
                 self.jobs = await self._scrape_from_page()
             else:
+                if self._status_callback:
+                    self._status_callback(f"获取到 {len(all_posts)} 个职位")
                 print(f"  API 获取到 {len(all_posts)} 个职位")
 
                 # 检查是否有翻页
                 # 获取总页数
+                if self._status_callback:
+                    self._status_callback("检测分页...")
                 page_count = await self._get_page_count()
                 print(f"  检测到 {page_count} 页数据")
 
                 # 如果有翻页，逐页获取
                 if page_count > 1:
                     for page_num in range(2, page_count + 1):
+                        if self._status_callback:
+                            self._status_callback(f"正在翻到第 {page_num} 页...")
                         print(f"  正在翻到第 {page_num} 页...")
                         await self._goto_page(page_num)
                         await asyncio.sleep(2)  # 等待数据加载
@@ -123,6 +136,8 @@ class FeishuScraper(BaseScraper):
                         seen_ids.add(post_id)
                         unique_posts.append(post)
 
+                if self._status_callback:
+                    self._status_callback(f"处理 {len(unique_posts)} 个职位数据...")
                 print(f"  去重后共 {len(unique_posts)} 个职位")
                 self.jobs = self._parse_job_posts(unique_posts)
 
