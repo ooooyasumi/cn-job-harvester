@@ -6,6 +6,6 @@ from .base import Job, BaseScraper
 from .registry import ScraperRegistry
 
 # 自动导入所有爬虫模块（触发注册）
-from . import feishu, bytedance, tencent
+from . import feishu, bytedance, tencent, xiaohongshu
 
 __all__ = ['Job', 'BaseScraper', 'ScraperRegistry']

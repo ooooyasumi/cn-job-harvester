@@ -1,5 +1,53 @@
 # 更新日志
 
+## v0.5.3 (2026-03-05)
+
+### 新增功能
+
+#### 小红书社招支持
+- 支持爬取小红书社招职位
+- 网站：https://job.xiaohongshu.com/social/position
+- 爬虫根据路径自动区分校招/社招
+
+**配置示例**:
+```yaml
+- name: 小红书
+  sites:
+    - name: 小红书校招
+      scraper: xiaohongshu
+      domain: job.xiaohongshu.com
+      path: /campus/position
+      job_type: campus
+    - name: 小红书社招
+      scraper: xiaohongshu
+      domain: job.xiaohongshu.com
+      path: /social/position
+      job_type: social
+```
+
+---
+
+## v0.5.2 (2026-03-05)
+
+### 新增功能
+
+#### 小红书招聘爬虫支持
+- 支持爬取小红书校招职位
+- 网站：https://job.xiaohongshu.com/campus/position
+
+**配置示例**:
+```yaml
+- name: 小红书
+  sites:
+    - name: 小红书校招
+      scraper: xiaohongshu
+      domain: job.xiaohongshu.com
+      job_type: campus
+      enabled: true
+```
+
+---
+
 ## v0.5.1 (2026-03-05)
 
 ### 配置结构优化

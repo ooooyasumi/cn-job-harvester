@@ -45,3 +45,18 @@ companies:
         domain: mediastorm.jobs.feishu.cn
         job_types: [social, campus]  # 同时支持社招和校招
         enabled: true
+
+  - name: 小红书
+    sites:
+      - name: 小红书校招
+        scraper: xiaohongshu
+        domain: job.xiaohongshu.com
+        path: /campus/position
+        job_type: campus
+        enabled: true
+      - name: 小红书社招
+        scraper: xiaohongshu
+        domain: job.xiaohongshu.com
+        path: /social/position
+        job_type: social
+        enabled: true

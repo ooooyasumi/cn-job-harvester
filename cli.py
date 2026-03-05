@@ -280,6 +280,7 @@ async def crawl_single_site(
     company_name = site['company']
     domain = site['domain']
     scraper_type = site['scraper']
+    path = site.get('path', '')  # 获取路径参数
 
     if status_callback:
         status_callback("正在初始化爬虫...")
@@ -293,7 +294,8 @@ async def crawl_single_site(
         company_name=company_name,
         domain=domain,
         status_callback=status_callback,
-        max_pages=max_pages
+        max_pages=max_pages,
+        path=path  # 传递路径参数
     )
 
     if status_callback:

@@ -39,12 +39,13 @@ python main.py quick -t campus,social    # 校招+社招
 运行 `python main.py` 后：
 
 1. **第一步：选择招聘类型**
+
    - 使用 `↑` `↓` 键移动
    - `空格键` 选择/取消
    - `回车键` 确认
    - 可多选校招、社招
-
 2. **第二步：选择公司和网站**
+
    - 显示符合选中类型的所有网站
    - 同样支持多选
 
@@ -91,41 +92,43 @@ companies:
 
 ### 配置字段说明
 
-| 字段 | 说明 |
-|-----|------|
-| `name` (公司级) | 公司名称 |
-| `sites` | 网站列表 |
-| `sites[].name` | 网站名称 |
-| `sites[].scraper` | 爬虫类型（feishu/bytedance/tencent 等） |
-| `sites[].domain` | 招聘网站域名 |
-| `sites[].job_type` | 单一类型（social/campus） |
-| `sites[].job_types` | 多种类型列表（可选） |
-| `sites[].enabled` | 是否启用该网站 |
+| 字段                  | 说明                                    |
+| --------------------- | --------------------------------------- |
+| `name` (公司级)     | 公司名称                                |
+| `sites`             | 网站列表                                |
+| `sites[].name`      | 网站名称                                |
+| `sites[].scraper`   | 爬虫类型（feishu/bytedance/tencent 等） |
+| `sites[].domain`    | 招聘网站域名                            |
+| `sites[].job_type`  | 单一类型（social/campus）               |
+| `sites[].job_types` | 多种类型列表（可选）                    |
+| `sites[].enabled`   | 是否启用该网站                          |
 
 ## 支持的招聘类型
 
-| 类型 | 标识 | 说明 |
-|-----|------|------|
+| 类型 | 标识       | 说明     |
+| ---- | ---------- | -------- |
 | 校招 | `campus` | 校园招聘 |
 | 社招 | `social` | 社会招聘 |
 
 ## 已支持的招聘网站域名
 
-| 公司 | 渠道 | 类型 | 完整 URL | 爬虫 |
-|-----|------|------|---------|------|
-| 字节跳动 | 字节跳动 | 社招 | https://jobs.bytedance.com/experienced/position | bytedance |
-| 字节跳动 | 字节跳动 | 校招 | https://jobs.bytedance.com/campus/position | bytedance |
-| 腾讯 | 腾讯 | 校招 | https://join.qq.com/post.html | tencent |
-| 腾讯 | 腾讯 | 社招 | https://careers.tencent.com/search.html | tencent |
-| 影视飓风 | 影视飓风 | 社招 | https://mediastorm.jobs.feishu.cn | feishu |
+| 公司     | 网站         | 类型 | 完整 URL                                        | 爬虫        |
+| -------- | ------------ | ---- | ----------------------------------------------- | ----------- |
+| 字节跳动 | 字节跳动社招 | 社招 | https://jobs.bytedance.com/experienced/position | bytedance   |
+| 字节跳动 | 字节跳动校招 | 校招 | https://jobs.bytedance.com/campus/position      | bytedance   |
+| 腾讯     | 腾讯校招     | 校招 | https://join.qq.com/post.html                   | tencent     |
+| 腾讯     | 腾讯社招     | 社招 | https://careers.tencent.com/search.html         | tencent     |
+| 影视飓风 | 影视飓风     | 社招 | https://mediastorm.jobs.feishu.cn               | feishu      |
+| 小红书   | 小红书校招   | 校招 | https://job.xiaohongshu.com/campus/position     | xiaohongshu |
+| 小红书   | 小红书社招   | 社招 | https://job.xiaohongshu.com/social/position     | xiaohongshu |
 
 ### 飞书招聘系统域名
 
 飞书招聘系统被多家公司使用，域名格式通常为 `{公司标识}.jobs.feishu.cn`：
 
-| 公司 | 域名 | 社招 | 校招 |
-|-----|------|:----:|:----:|
-| 影视飓风 | mediastorm.jobs.feishu.cn | ✓ | - |
+| 公司     | 域名                      | 社招 | 校招 |
+| -------- | ------------------------- | :--: | :--: |
+| 影视飓风 | mediastorm.jobs.feishu.cn |  ✓  |  -  |
 
 > 如果你知道更多使用飞书招聘的公司域名，可以添加到配置文件中。
 
@@ -207,6 +210,15 @@ job-harvester/
 ├── main.py                 # 程序入口
 └── README.md
 ```
+
+## 版本历史
+
+**最新版本：v0.5.3** (2026-03-06)
+
+- 新增小红书社招支持
+- 新增小红书校招爬虫
+
+👉 [查看完整更新日志](CHANGELOG.md)
 
 ## 合规声明
 
