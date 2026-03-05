@@ -5,7 +5,7 @@ import yaml
 import pandas as pd
 import questionary
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict
 from datetime import datetime
 import sys
 
@@ -84,17 +84,24 @@ def get_companies(config: Dict = None) -> List[Dict]:
     return config.get('companies', [])
 
 
-def get_all_channels(companies: List[Dict] = None) -> List[Dict]:
-    """获取所有渠道（展开为任务列表）
+def get_all_sites(companies: List[Dict] = None) -> List[Dict]:
+    """获取所有网站
 
-    返回格式:
+    配置结构：
+    - site['domain']: 域名
+    - site['path']: 路径（可选）
+    - site['job_type']: 单一类型
+    - 或 site['job_types']: 多种类型
+
+    返回格式（每个网站只返回一次）:
     [
         {
             'company': '字节跳动',
-            'channel': '字节跳动',
+            'site': '字节跳动社招',
             'scraper': 'bytedance',
-            'job_type': 'social',
-            'domain': 'jobs.bytedance.com'
+            'domain': 'jobs.bytedance.com',
+            'path': '/experienced/position',
+            'job_types': ['social']
         },
         ...
     ]
@@ -102,34 +109,60 @@ def get_all_channels(companies: List[Dict] = None) -> List[Dict]:
     if companies is None:
         companies = get_companies()
 
-    channels = []
+    sites = []
     for company in companies:
         company_name = company['name']
-        for channel in company.get('channels', []):
-            if not channel.get('enabled', True):
+        for site in company.get('sites', []):
+            if not site.get('enabled', True):
                 continue
-            channel_name = channel.get('name', company_name)
-            scraper = channel.get('scraper', 'feishu')
-            domains = channel.get('domains', {})
 
-            for job_type, domain in domains.items():
-                if job_type in JOB_TYPES:
-                    channels.append({
-                        'company': company_name,
-                        'channel': channel_name,
-                        'scraper': scraper,
-                        'job_type': job_type,
-                        'domain': domain
-                    })
+            site_name = site.get('name', company_name)
+            scraper = site.get('scraper', 'feishu')
+            domain = site.get('domain', '')
+            path = site.get('path', '')
 
-    return channels
+            # 处理类型：支持 job_type 或 job_types
+            if 'job_types' in site:
+                job_types = site['job_types']
+            elif 'job_type' in site:
+                job_types = [site['job_type']]
+            else:
+                job_types = ['social']
+
+            if domain:
+                sites.append({
+                    'company': company_name,
+                    'site': site_name,
+                    'scraper': scraper,
+                    'domain': domain,
+                    'path': path,
+                    'job_types': job_types
+                })
+
+    return sites
 
 
-def filter_channels_by_types(channels: List[Dict], selected_types: List[str]) -> List[Dict]:
-    """根据选中的类型筛选渠道"""
+def filter_sites_by_type(sites: List[Dict], selected_type: str) -> List[Dict]:
+    """根据选中的类型筛选网站"""
+    return [s for s in sites if selected_type in s.get('job_types', [])]
+
+
+def filter_sites_by_types(sites: List[Dict], selected_types: List[str]) -> List[Dict]:
+    """根据选中的多个类型筛选网站（网站只返回一次）"""
     if not selected_types:
-        return channels
-    return [c for c in channels if c['job_type'] in selected_types]
+        return sites
+
+    result = []
+    seen = set()
+    for s in sites:
+        # 如果网站支持任一选中的类型，且未添加过
+        key = f"{s['company']}_{s['site']}"
+        if key not in seen:
+            if any(t in s.get('job_types', []) for t in selected_types):
+                result.append(s)
+                seen.add(key)
+
+    return result
 
 
 # ============== 交互式选择模块 ==============
@@ -171,30 +204,27 @@ def interactive_select_types() -> List[str]:
     return selected
 
 
-def interactive_select_channels(channels: List[Dict]) -> List[Dict]:
-    """交互式选择渠道"""
+def interactive_select_sites(sites: List[Dict]) -> List[Dict]:
+    """交互式选择网站（每个网站只显示一次）"""
     if not sys.stdin.isatty():
-        return channels
+        return sites
 
-    if not channels:
-        print("没有符合条件的招聘渠道")
+    if not sites:
+        print("没有符合条件的招聘网站")
         return []
 
-    print("\n=== 第二步：选择公司和渠道 ===")
+    print("\n=== 第二步：选择公司和网站 ===")
     print("提示：使用上下键移动，空格键选择/取消，回车键确认\n")
 
-    # 按公司分组显示
     choices = []
-    current_company = None
+    for s in sites:
+        # 显示网站支持的所有类型
+        type_labels = [JOB_TYPES.get(t, t) for t in s.get('job_types', [])]
+        type_str = '/'.join(type_labels)
+        title = f"{s['company']} - {s['site']} ({type_str})"
+        choices.append(questionary.Choice(title=title, value=s))
 
-    for ch in channels:
-        if ch['company'] != current_company:
-            current_company = ch['company']
-        job_type_label = JOB_TYPES.get(ch['job_type'], ch['job_type'])
-        title = f"{ch['company']} - {ch['channel']} ({job_type_label})"
-        choices.append(questionary.Choice(title=title, value=ch))
-
-    choices.insert(0, questionary.Choice(title="[全选] 选择所有渠道", value="ALL"))
+    choices.insert(0, questionary.Choice(title="[全选] 选择所有网站", value="ALL"))
 
     selected = questionary.checkbox(
         "",
@@ -211,7 +241,7 @@ def interactive_select_channels(channels: List[Dict]) -> List[Dict]:
         return []
 
     if "ALL" in selected:
-        return channels
+        return sites
 
     return selected
 
@@ -223,25 +253,33 @@ def interactive_select() -> List[Dict]:
     if not selected_types:
         return []
 
-    # 获取所有渠道并筛选
-    all_channels = get_all_channels()
-    filtered_channels = filter_channels_by_types(all_channels, selected_types)
+    # 获取所有网站并筛选
+    all_sites = get_all_sites()
+    filtered_sites = filter_sites_by_types(all_sites, selected_types)
 
-    # 第二步：选择渠道
-    return interactive_select_channels(filtered_channels)
+    # 第二步：选择网站
+    return interactive_select_sites(filtered_sites)
 
 
 # ============== 爬取模块 ==============
 
-async def crawl_single_channel(
-    channel: Dict,
+async def crawl_single_site(
+    site: Dict,
+    selected_types: List[str] = None,
     status_callback=None,
     max_pages: int = None
 ) -> List:
-    """爬取单个渠道"""
-    company_name = channel['company']
-    domain = channel['domain']
-    scraper_type = channel['scraper']
+    """爬取单个网站
+
+    Args:
+        site: 网站配置
+        selected_types: 选中的类型列表，用于筛选爬取的职位
+        status_callback: 状态回调
+        max_pages: 最大页数
+    """
+    company_name = site['company']
+    domain = site['domain']
+    scraper_type = site['scraper']
 
     if status_callback:
         status_callback("正在初始化爬虫...")
@@ -263,6 +301,11 @@ async def crawl_single_channel(
 
     jobs = await scraper.scrape()
 
+    # 根据选中的类型筛选职位
+    if selected_types:
+        type_names = [JOB_TYPES.get(t, t) for t in selected_types]
+        jobs = [j for j in jobs if j.job_type in type_names]
+
     if status_callback:
         status_callback(f"爬取完成，共 {len(jobs)} 个职位")
         await asyncio.sleep(0.3)
@@ -270,27 +313,29 @@ async def crawl_single_channel(
     return jobs
 
 
-def crawl_channels(channels: List[Dict], output_path: str, format: str, max_pages: int = None):
-    """爬取多个渠道"""
-    typer.echo(f"\n发现 {len(channels)} 个招聘渠道")
+def crawl_sites(sites: List[Dict], selected_types: List[str], output_path: str, format: str, max_pages: int = None):
+    """爬取多个网站"""
+    typer.echo(f"\n发现 {len(sites)} 个招聘网站")
     typer.echo("按 Ctrl+C 可中断爬取并保存已获取的数据")
 
     all_jobs = []
     interrupted = False
 
-    for idx, channel in enumerate(channels, 1):
-        company_name = channel['company']
-        channel_name = channel['channel']
-        domain = channel['domain']
-        job_type_label = JOB_TYPES.get(channel['job_type'], channel['job_type'])
+    for idx, site in enumerate(sites, 1):
+        company_name = site['company']
+        site_name = site['site']
 
-        def status_callback(msg, co=idx, total=len(channels)):
-            _print_status(f"[{co}/{total}] {company_name}-{channel_name}: {msg}")
+        # 显示网站支持的所有类型
+        type_labels = [JOB_TYPES.get(t, t) for t in site.get('job_types', [])]
+        type_str = '/'.join(type_labels)
 
-        typer.echo(f"\n正在爬取：{company_name} - {channel_name} ({job_type_label})")
+        def status_callback(msg, co=idx, total=len(sites)):
+            _print_status(f"[{co}/{total}] {company_name}-{site_name}: {msg}")
+
+        typer.echo(f"\n正在爬取：{company_name} - {site_name} ({type_str})")
 
         try:
-            jobs = asyncio.run(crawl_single_channel(channel, status_callback, max_pages))
+            jobs = asyncio.run(crawl_single_site(site, selected_types, status_callback, max_pages))
             all_jobs.extend(jobs)
             typer.echo(f"  爬取到 {len(jobs)} 个职位")
         except KeyboardInterrupt:
@@ -327,15 +372,24 @@ def callback(ctx: typer.Context):
 
 def _run_interactive_mode():
     """运行交互式模式"""
-    selected = interactive_select()
-    if not selected:
-        typer.echo("未选择任何渠道")
+    selected_types = interactive_select_types()
+    if not selected_types:
+        typer.echo("未选择任何类型")
         return
 
-    typer.echo(f"\n已选择 {len(selected)} 个渠道")
-    for ch in selected:
-        job_type_label = JOB_TYPES.get(ch['job_type'], ch['job_type'])
-        typer.echo(f"  - {ch['company']} - {ch['channel']} ({job_type_label})")
+    all_sites = get_all_sites()
+    filtered_sites = filter_sites_by_types(all_sites, selected_types)
+
+    selected = interactive_select_sites(filtered_sites)
+    if not selected:
+        typer.echo("未选择任何网站")
+        return
+
+    typer.echo(f"\n已选择 {len(selected)} 个网站")
+    for s in selected:
+        type_labels = [JOB_TYPES.get(t, t) for t in s.get('job_types', [])]
+        type_str = '/'.join(type_labels)
+        typer.echo(f"  - {s['company']} - {s['site']} ({type_str})")
 
     # 输入文件名
     if not sys.stdin.isatty():
@@ -351,37 +405,41 @@ def _run_interactive_mode():
         output = _resolve_output_path(user_input, None, 'csv')
 
     typer.echo("\n按 Ctrl+C 可中断爬取并保存已获取的数据")
-    crawl_channels(selected, output, 'csv')
+    crawl_sites(selected, selected_types, output, 'csv')
 
 
 @app.command("quick")
 def quick(
     output_dir: Optional[str] = typer.Option(None, "-d", "--dir", help="输出目录"),
     format: str = typer.Option("csv", "-f", "--format", help="输出格式：csv 或 excel"),
-    types: Optional[str] = typer.Option(None, "-t", "--types", help="招聘类型，逗号分隔：campus,internship,social"),
+    types: Optional[str] = typer.Option(None, "-t", "--types", help="招聘类型，逗号分隔：campus,social"),
     max_pages: Optional[int] = typer.Option(None, "-p", "--max-pages", help="最大爬取页数"),
 ):
-    """一键爬取所有启用的渠道
+    """一键爬取所有启用的网站
 
     示例:
         python main.py quick
-        python main.py quick -t campus,social
-        python main.py quick -t internship
+        python main.py quick -t campus
+        python main.py quick -t social,campus
     """
     output_path = _resolve_output_path(None, output_dir, format)
 
-    all_channels = get_all_channels()
+    all_sites = get_all_sites()
 
     # 解析类型筛选
+    selected_types = None
     if types:
         selected_types = [t.strip() for t in types.split(',')]
-        all_channels = filter_channels_by_types(all_channels, selected_types)
+        all_sites = filter_sites_by_types(all_sites, selected_types)
 
-    if not all_channels:
-        typer.echo("没有符合条件的招聘渠道")
+    if not all_sites:
+        typer.echo("没有符合条件的招聘网站")
         raise typer.Exit(0)
 
-    crawl_channels(all_channels, output_path, format, max_pages)
+    if not selected_types:
+        selected_types = list(JOB_TYPES.keys())
+
+    crawl_sites(all_sites, selected_types, output_path, format, max_pages)
 
 
 @app.command("crawl")
@@ -391,18 +449,26 @@ def crawl(
     format: str = typer.Option("csv", "-f", "--format", help="输出格式"),
     max_pages: Optional[int] = typer.Option(None, "-p", "--max-pages", help="最大爬取页数"),
 ):
-    """交互式爬取 - 先选类型再选渠道
+    """交互式爬取 - 先选类型再选网站
 
     示例:
         python main.py crawl
     """
-    selected = interactive_select()
+    selected_types = interactive_select_types()
+    if not selected_types:
+        typer.echo("未选择任何类型")
+        raise typer.Exit(0)
+
+    all_sites = get_all_sites()
+    filtered_sites = filter_sites_by_types(all_sites, selected_types)
+
+    selected = interactive_select_sites(filtered_sites)
     if not selected:
-        typer.echo("未选择任何渠道")
+        typer.echo("未选择任何网站")
         raise typer.Exit(0)
 
     output_path = _resolve_output_path(output, output_dir, format)
-    crawl_channels(selected, output_path, format, max_pages)
+    crawl_sites(selected, selected_types, output_path, format, max_pages)
 
 
 @app.command("init")
@@ -418,36 +484,50 @@ def init_config():
     default_config = """# 公司招聘配置
 #
 # 配置结构说明：
-#   - 类型（job_type）：校招(campus)、实习(internship)、社招(social)
-#   - 公司（company）：阿里、字节、腾讯等
-#   - 渠道（channel）：淘天集团、千问团队等 - 每个渠道有独立的招聘网站
+#   - 类型（job_type）：校招(campus)、社招(social)
+#   - 公司（company）：字节、腾讯等
+#   - 网站（site）：每个网站独立配置
+#     - job_type: 单一类型
+#     - job_types: 多种类型（一个网站同时支持校招和社招）
 #
-# 选择流程：先选类型 → 再选公司-渠道
+# 选择流程：先选类型 → 再选公司-网站
 
 companies:
-  - name: 影视飓风
-    channels:
-      - name: 影视飓风
-        scraper: feishu
-        domains:
-          social: mediastorm.jobs.feishu.cn
+  - name: 字节跳动
+    sites:
+      - name: 字节跳动社招
+        scraper: bytedance
+        domain: jobs.bytedance.com
+        path: /experienced/position
+        job_type: social
+        enabled: true
+      - name: 字节跳动校招
+        scraper: bytedance
+        domain: jobs.bytedance.com
+        path: /campus/position
+        job_type: campus
         enabled: true
 
-  # 添加更多公司示例:
-  # - name: 阿里巴巴
-  #   channels:
-  #     - name: 淘天集团
-  #       scraper: alibaba
-  #       domains:
-  #         social: job.alibaba.com/taotian
-  #         campus: campus.alibaba.com/taotian
-  #       enabled: true
-  #     - name: 千问团队
-  #       scraper: alibaba
-  #       domains:
-  #         social: job.alibaba.com/qwen
-  #         campus: campus.alibaba.com/qwen
-  #       enabled: true
+  - name: 腾讯
+    sites:
+      - name: 腾讯校招
+        scraper: tencent
+        domain: join.qq.com
+        job_type: campus
+        enabled: true
+      - name: 腾讯社招
+        scraper: tencent
+        domain: careers.tencent.com
+        job_type: social
+        enabled: true
+
+  - name: 影视飓风
+    sites:
+      - name: 影视飓风
+        scraper: feishu
+        domain: mediastorm.jobs.feishu.cn
+        job_types: [social, campus]  # 同时支持社招和校招
+        enabled: true
 """
 
     with open(config_path, 'w', encoding='utf-8') as f:

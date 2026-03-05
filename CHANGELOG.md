@@ -1,5 +1,38 @@
 # 更新日志
 
+## v0.5.1 (2026-03-05)
+
+### 配置结构优化
+
+#### 网站配置替代渠道配置
+- 将"渠道"改为"网站"，每个网站独立配置
+- 一个网站可以支持多种类型（`job_types: [social, campus]`）
+- URL 不同需要分开成多个网站配置
+
+**新配置结构**:
+```yaml
+companies:
+  - name: 字节跳动
+    sites:
+      - name: 字节跳动社招
+        scraper: bytedance
+        domain: jobs.bytedance.com
+        job_type: social        # 单一类型
+      - name: 字节跳动校招
+        scraper: bytedance
+        domain: jobs.bytedance.com
+        job_type: campus
+
+  - name: 影视飓风
+    sites:
+      - name: 影视飓风
+        scraper: feishu
+        domain: mediastorm.jobs.feishu.cn
+        job_types: [social, campus]  # 多种类型
+```
+
+---
+
 ## v0.5.0 (2026-03-05)
 
 ### 架构重构

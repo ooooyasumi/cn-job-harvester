@@ -2,34 +2,46 @@
 #
 # 配置结构说明：
 #   - 类型（job_type）：校招(campus)、社招(social)
-#   - 公司（company）：阿里、字节、腾讯等
-#   - 渠道（channel）：淘天集团、千问团队等 - 每个渠道有独立的招聘网站
+#   - 公司（company）：字节、腾讯等
+#   - 网站（site）：每个网站独立配置
+#     - job_type: 单一类型
+#     - job_types: 多种类型（一个网站同时支持校招和社招）
 #
-# 选择流程：先选类型 → 再选公司-渠道
+# 选择流程：先选类型 → 再选公司-网站
 
 companies:
   - name: 字节跳动
-    channels:
-      - name: 字节跳动
+    sites:
+      - name: 字节跳动社招
         scraper: bytedance
-        domains:
-          social: jobs.bytedance.com
-          campus: jobs.bytedance.com
+        domain: jobs.bytedance.com
+        path: /experienced/position
+        job_type: social
+        enabled: true
+      - name: 字节跳动校招
+        scraper: bytedance
+        domain: jobs.bytedance.com
+        path: /campus/position
+        job_type: campus
         enabled: true
 
   - name: 腾讯
-    channels:
-      - name: 腾讯
+    sites:
+      - name: 腾讯校招
         scraper: tencent
-        domains:
-          campus: join.qq.com
-          social: careers.tencent.com
+        domain: join.qq.com
+        job_type: campus
+        enabled: true
+      - name: 腾讯社招
+        scraper: tencent
+        domain: careers.tencent.com
+        job_type: social
         enabled: true
 
   - name: 影视飓风
-    channels:
+    sites:
       - name: 影视飓风
         scraper: feishu
-        domains:
-          social: mediastorm.jobs.feishu.cn
+        domain: mediastorm.jobs.feishu.cn
+        job_types: [social, campus]  # 同时支持社招和校招
         enabled: true

@@ -44,8 +44,8 @@ python main.py quick -t campus,social    # 校招+社招
    - `回车键` 确认
    - 可多选校招、社招
 
-2. **第二步：选择公司和渠道**
-   - 显示符合选中类型的所有渠道
+2. **第二步：选择公司和网站**
+   - 显示符合选中类型的所有网站
    - 同样支持多选
 
 ## 配置结构
@@ -54,19 +54,38 @@ python main.py quick -t campus,social    # 校招+社招
 
 ```yaml
 companies:
-  - name: 阿里巴巴
-    channels:
-      - name: 淘天集团
-        scraper: alibaba
-        domains:
-          social: job.alibaba.com/taotian
-          campus: campus.alibaba.com/taotian
+  - name: 字节跳动
+    sites:
+      - name: 字节跳动社招
+        scraper: bytedance
+        domain: jobs.bytedance.com
+        job_type: social
         enabled: true
-      - name: 千问团队
-        scraper: alibaba
-        domains:
-          social: job.alibaba.com/qwen
-          campus: campus.alibaba.com/qwen
+      - name: 字节跳动校招
+        scraper: bytedance
+        domain: jobs.bytedance.com
+        job_type: campus
+        enabled: true
+
+  - name: 腾讯
+    sites:
+      - name: 腾讯校招
+        scraper: tencent
+        domain: join.qq.com
+        job_type: campus
+        enabled: true
+      - name: 腾讯社招
+        scraper: tencent
+        domain: careers.tencent.com
+        job_type: social
+        enabled: true
+
+  - name: 影视飓风
+    sites:
+      - name: 影视飓风
+        scraper: feishu
+        domain: mediastorm.jobs.feishu.cn
+        job_types: [social, campus]  # 一个网站支持多种类型
         enabled: true
 ```
 
@@ -75,13 +94,13 @@ companies:
 | 字段 | 说明 |
 |-----|------|
 | `name` (公司级) | 公司名称 |
-| `channels` | 渠道列表 |
-| `channels[].name` | 渠道名称（如淘天集团、千问团队） |
-| `channels[].scraper` | 爬虫类型（feishu/bytedance/tencent 等） |
-| `channels[].domains` | 各类型的域名映射 |
-| `channels[].domains.social` | 社招域名 |
-| `channels[].domains.campus` | 校招域名 |
-| `channels[].enabled` | 是否启用该渠道 |
+| `sites` | 网站列表 |
+| `sites[].name` | 网站名称 |
+| `sites[].scraper` | 爬虫类型（feishu/bytedance/tencent 等） |
+| `sites[].domain` | 招聘网站域名 |
+| `sites[].job_type` | 单一类型（social/campus） |
+| `sites[].job_types` | 多种类型列表（可选） |
+| `sites[].enabled` | 是否启用该网站 |
 
 ## 支持的招聘类型
 
@@ -146,12 +165,11 @@ from . import newcompany
 ```yaml
 companies:
   - name: 新公司
-    channels:
+    sites:
       - name: 新公司
         scraper: newcompany
-        domains:
-          social: jobs.newcompany.com
-          campus: campus.newcompany.com
+        domain: jobs.newcompany.com
+        job_type: social
         enabled: true
 ```
 
