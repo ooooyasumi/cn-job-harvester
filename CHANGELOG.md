@@ -1,5 +1,64 @@
 # 更新日志
 
+## v0.5.0 (2026-03-05)
+
+### 架构重构
+
+#### 模块化架构 - 注册器模式
+- 新增 `ScraperRegistry` 注册器，添加新爬虫只需创建文件并添加装饰器
+- 统一爬虫基类 `BaseScraper`，提供 `progress()`, `progress_with_eta()`, `done()` 方法
+- 所有爬虫使用统一的状态回调，移除了各爬虫中的 `print()` 语句
+
+#### 配置结构优化
+- 三层配置结构：公司 -> 渠道 -> 类型（校招/社招）
+- 支持每个公司配置多个招聘渠道（如淘天集团、千问团队等）
+- 简化招聘类型：仅保留校招和社招
+
+#### 交互式选择流程
+- 第一步：多选招聘类型（校招/社招）
+- 第二步：多选公司-渠道
+- 支持全选快捷操作
+
+#### 腾讯爬虫优化
+- 根据域名自动判断爬取类型：
+  - `join.qq.com` → 校招
+  - `careers.tencent.com` → 社招
+
+### 使用示例
+
+```bash
+# 交互式选择
+python main.py
+
+# 一键爬取所有
+python main.py quick
+
+# 仅爬取校招
+python main.py quick -t campus
+
+# 仅爬取社招
+python main.py quick -t social
+```
+
+### 添加新爬虫
+
+现在只需 3 步：
+
+1. 创建爬虫文件 `scrapers/newcompany.py`：
+```python
+@ScraperRegistry.register('newcompany')
+class NewCompanyScraper(BaseScraper):
+    async def scrape(self) -> List[Job]:
+        # 核心爬取逻辑
+        pass
+```
+
+2. 在 `scrapers/__init__.py` 添加导入
+
+3. 在 `config/companies.yaml` 添加配置
+
+---
+
 ## v0.4.0 (2026-03-02)
 
 ### 性能优化
@@ -342,7 +401,12 @@ python main.py crawl --all
 ### v0.4.0（已完成）✅
 - ✅ 性能优化（字节跳动爬虫 8 倍提速）
 
-### v0.5.0（短期）
+### v0.5.0（已完成）✅
+- ✅ 模块化架构重构（注册器模式）
+- ✅ 统一进度显示接口
+- ✅ 多渠道配置支持
+
+### v0.6.0（短期）
 - 增量更新功能（基于职位 ID 去重）
 - 错误处理和重试机制
 - 更多招聘系统支持（北森、Moka）

@@ -1,15 +1,35 @@
-companies:
-  - name: 影视飓风
-    domain: mediastorm.jobs.feishu.cn
-    type: feishu
-    enabled: true
+# 公司招聘配置
+#
+# 配置结构说明：
+#   - 类型（job_type）：校招(campus)、社招(social)
+#   - 公司（company）：阿里、字节、腾讯等
+#   - 渠道（channel）：淘天集团、千问团队等 - 每个渠道有独立的招聘网站
+#
+# 选择流程：先选类型 → 再选公司-渠道
 
+companies:
   - name: 字节跳动
-    domain: jobs.bytedance.com
-    type: bytedance
-    enabled: true
+    channels:
+      - name: 字节跳动
+        scraper: bytedance
+        domains:
+          social: jobs.bytedance.com
+          campus: jobs.bytedance.com
+        enabled: true
 
   - name: 腾讯
-    domain: join.qq.com
-    type: tencent
-    enabled: true
+    channels:
+      - name: 腾讯
+        scraper: tencent
+        domains:
+          campus: join.qq.com
+          social: careers.tencent.com
+        enabled: true
+
+  - name: 影视飓风
+    channels:
+      - name: 影视飓风
+        scraper: feishu
+        domains:
+          social: mediastorm.jobs.feishu.cn
+        enabled: true

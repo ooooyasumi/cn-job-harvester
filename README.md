@@ -1,6 +1,14 @@
 # JobHarvester - 招聘数据爬取工具
 
-一个命令行工具，用于自动爬取使用飞书招聘系统的公司职位信息，支持 CSV/Excel 格式导出。
+一个命令行工具，用于自动爬取公司招聘职位信息，支持 CSV/Excel 格式导出。采用可扩展的模块化架构，支持多种招聘平台。
+
+## 功能特性
+
+- **两大招聘类型**：校招、社招
+- **多渠道支持**：每个公司可有多个招聘渠道（如淘天集团、千问团队等）
+- **交互式选择**：先选类型 → 再选渠道，支持多选
+- **模块化架构**：添加新爬虫只需创建一个文件
+- **多种导出格式**：支持 CSV、Excel 格式
 
 ## 快速开始
 
@@ -14,77 +22,153 @@ playwright install chromium
 ### 基本使用
 
 ```bash
-# 方式 1：直接运行，进入交互式菜单（推荐）
+# 方式 1：交互式选择（推荐）
 python main.py
 
-# 方式 2：交互式选择公司（空格键选择，回车确认）
-python main.py crawl -i
+# 方式 2：一键爬取所有
+python main.py quick
 
-# 方式 3：爬取配置中的所有公司
-python main.py crawl --all
-
-# 方式 4：爬取单家公司
-python main.py crawl -c "影视飓风"
-
-# 导出为 Excel 格式
-python main.py crawl -c "影视飓风" -f excel
-
-# 查看已保存的数据
-python main.py list
+# 方式 3：指定类型爬取
+python main.py quick -t campus           # 仅校招
+python main.py quick -t social           # 仅社招
+python main.py quick -t campus,social    # 校招+社招
 ```
 
-### 输出目录
+### 交互式选择流程
 
-- **默认输出目录**: `./output/` 文件夹
-- **未指定文件名**: 自动生成带时间戳的文件名（如 `jobs_20260302_143025.csv`）
-- **自定义输出**: 使用 `-o` 指定文件名，使用 `-d` 指定目录
+运行 `python main.py` 后：
 
-### 交互式菜单说明
+1. **第一步：选择招聘类型**
+   - 使用 `↑` `↓` 键移动
+   - `空格键` 选择/取消
+   - `回车键` 确认
+   - 可多选校招、社招
 
-直接运行 `python main.py` 后，会进入交互式菜单：
+2. **第二步：选择公司和渠道**
+   - 显示符合选中类型的所有渠道
+   - 同样支持多选
 
-1. **选择公司**：使用 `↑` `↓` 键移动，`空格键` 选择/取消，`回车键` 确认
-2. **输入文件名**：输入保存的文件名，默认 `jobs.csv`
-3. **开始爬取**：自动爬取选中的公司并保存数据
+## 配置结构
 
-支持多选，可以选择多家公司一次性爬取。
-
-### 命令行帮助
-
-```bash
-python main.py --help
-python main.py crawl --help
-```
-
-## 配置
-
-编辑 `config/companies.yaml` 添加更多公司：
+编辑 `config/companies.yaml` 添加公司：
 
 ```yaml
 companies:
-  - name: 影视飓风
-    domain: mediastorm.jobs.feishu.cn
-    type: feishu
-    enabled: true
-
-  - name: 示例公司
-    domain: example.jobs.feishu.cn
-    type: feishu
-    enabled: true
+  - name: 阿里巴巴
+    channels:
+      - name: 淘天集团
+        scraper: alibaba
+        domains:
+          social: job.alibaba.com/taotian
+          campus: campus.alibaba.com/taotian
+        enabled: true
+      - name: 千问团队
+        scraper: alibaba
+        domains:
+          social: job.alibaba.com/qwen
+          campus: campus.alibaba.com/qwen
+        enabled: true
 ```
 
-## 爬取字段
+### 配置字段说明
 
 | 字段 | 说明 |
 |-----|------|
-| title | 职位名称 |
-| company | 公司名称 |
-| salary | 薪资范围 |
-| location | 工作地点 |
-| job_type | 职位类型（社招/校招/实习） |
-| description | 职位描述 |
-| url | 投递链接 |
-| published_date | 发布时间 |
+| `name` (公司级) | 公司名称 |
+| `channels` | 渠道列表 |
+| `channels[].name` | 渠道名称（如淘天集团、千问团队） |
+| `channels[].scraper` | 爬虫类型（feishu/bytedance/tencent 等） |
+| `channels[].domains` | 各类型的域名映射 |
+| `channels[].domains.social` | 社招域名 |
+| `channels[].domains.campus` | 校招域名 |
+| `channels[].enabled` | 是否启用该渠道 |
+
+## 支持的招聘类型
+
+| 类型 | 标识 | 说明 |
+|-----|------|------|
+| 校招 | `campus` | 校园招聘 |
+| 社招 | `social` | 社会招聘 |
+
+## 已支持的招聘网站域名
+
+| 公司 | 渠道 | 类型 | 完整 URL | 爬虫 |
+|-----|------|------|---------|------|
+| 字节跳动 | 字节跳动 | 社招 | https://jobs.bytedance.com/experienced/position | bytedance |
+| 字节跳动 | 字节跳动 | 校招 | https://jobs.bytedance.com/campus/position | bytedance |
+| 腾讯 | 腾讯 | 校招 | https://join.qq.com/post.html | tencent |
+| 腾讯 | 腾讯 | 社招 | https://careers.tencent.com/search.html | tencent |
+| 影视飓风 | 影视飓风 | 社招 | https://mediastorm.jobs.feishu.cn | feishu |
+
+### 飞书招聘系统域名
+
+飞书招聘系统被多家公司使用，域名格式通常为 `{公司标识}.jobs.feishu.cn`：
+
+| 公司 | 域名 | 社招 | 校招 |
+|-----|------|:----:|:----:|
+| 影视飓风 | mediastorm.jobs.feishu.cn | ✓ | - |
+
+> 如果你知道更多使用飞书招聘的公司域名，可以添加到配置文件中。
+
+## 添加新爬虫
+
+### 1. 创建爬虫文件
+
+在 `scrapers/` 目录下创建 `newcompany.py`：
+
+```python
+from .base import BaseScraper, Job
+from .registry import ScraperRegistry
+
+@ScraperRegistry.register('newcompany')
+class NewCompanyScraper(BaseScraper):
+    """新公司招聘爬虫"""
+
+    @classmethod
+    def get_scraper_type(cls) -> str:
+        return 'newcompany'
+
+    async def scrape(self) -> List[Job]:
+        # 实现爬取逻辑
+        jobs = []
+        # ...
+        return jobs
+```
+
+### 2. 在 `__init__.py` 中导入
+
+```python
+from . import newcompany
+```
+
+### 3. 添加配置
+
+```yaml
+companies:
+  - name: 新公司
+    channels:
+      - name: 新公司
+        scraper: newcompany
+        domains:
+          social: jobs.newcompany.com
+          campus: campus.newcompany.com
+        enabled: true
+```
+
+## 命令参考
+
+```bash
+python main.py              # 交互式选择
+python main.py quick        # 一键爬取所有
+python main.py quick -t campus        # 仅校招
+python main.py quick -t social        # 仅社招
+python main.py quick -t campus,social # 校招+社招
+python main.py crawl        # 交互式选择
+python main.py init         # 初始化配置
+python main.py config       # 查看配置
+python main.py scrapers     # 列出爬虫
+python main.py list         # 查看数据
+```
 
 ## 项目结构
 
@@ -93,54 +177,22 @@ job-harvester/
 ├── config/
 │   └── companies.yaml      # 公司配置
 ├── scrapers/
-│   ├── __init__.py
+│   ├── __init__.py         # 模块入口
 │   ├── base.py             # 基础爬虫类
-│   └── feishu.py           # 飞书招聘爬虫
+│   ├── registry.py         # 爬虫注册器
+│   ├── feishu.py           # 飞书招聘爬虫
+│   ├── bytedance.py        # 字节跳动爬虫
+│   └── tencent.py          # 腾讯招聘爬虫
 ├── storage/
-│   ├── __init__.py
 │   └── csv_excel.py        # 数据存储
 ├── cli.py                  # 命令行接口
 ├── main.py                 # 程序入口
-├── requirements.txt
 └── README.md
 ```
 
-## 版本历史
-
-### v0.3.7 (当前版本)
-
-- ✅ **腾讯招聘爬虫支持**：支持爬取腾讯招聘（join.qq.com / careers.tencent.com）
-  - 同时爬取校招/实习和社招两类职位
-  - 社招支持翻页爬取，默认最多 50 页
-
-### v0.3.6 (2026-03-02)
-
-### v0.3.5 (2026-03-02)
-
-### v0.3.4 (2026-03-02)
-
-### v0.3.3 (2026-03-02)
-
-### v0.3.2 (2026-03-02)
-
-### v0.2.0
-
-- ✅ 支持爬取飞书招聘系统
-- ✅ **自动翻页**：支持多页数据，自动获取全部职位
-- ✅ CSV/Excel 格式导出
-- ✅ **完整字段**：包含职位描述和职位要求
-- ✅ **正确类型**：区分社招、校招、实习
-- ✅ 现代化命令行接口
-- ✅ 配置文件管理
-
-### v0.1.0
-
-- 初始版本
-- 基础的飞书招聘爬取功能
-
 ## 合规声明
 
-> **免责声明**：本工具仅用于学习和研究目的，请遵守目标网站的 robots.txt 协议和使用条款，不要进行高频爬取，避免对目标服务器造成负担。
+> 本工具仅用于学习和研究目的，请遵守目标网站的 robots.txt 协议和使用条款。
 
 ## License
 
