@@ -1,5 +1,48 @@
 # 更新日志
 
+## v0.5.4 (2026-03-11)
+
+### 新增功能
+
+#### vivo 招聘爬虫支持
+- 新增 vivo 校招爬虫（北森系统）
+  - 网站：https://hr-campus.vivo.com/jobs
+  - 职位数：约 267 个
+  - 爬虫：`vivo`
+- 新增 vivo 社招爬虫（自研系统）
+  - 网站：https://hr.vivo.com/jobs
+  - 职位数：约 853 个
+  - 爬虫：`vivo_social`
+
+**配置示例**:
+```yaml
+- name: vivo
+  sites:
+    - name: vivo 校招
+      scraper: vivo
+      domain: hr-campus.vivo.com
+      path: /jobs
+      job_type: campus
+    - name: vivo 社招
+      scraper: vivo_social
+      domain: hr.vivo.com
+      path: /jobs
+      job_type: social
+```
+
+### Bug 修复
+
+- 修复 vivo 爬虫页数计算类型错误（`max_pages` 空值处理）
+- 修复 vivo 社招爬虫翻页逻辑
+
+### 文档更新
+
+- README.md: 添加 vivo 到已支持网站列表
+- DOCUMENT/DOCUMENT.md: 添加 GitHub 仓库地址和版本发布流程
+- 将 DOCUMENT/ 目录加入 .gitignore（内部开发文档）
+
+---
+
 ## v0.5.3 (2026-03-05)
 
 ### 新增功能
