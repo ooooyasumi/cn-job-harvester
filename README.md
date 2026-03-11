@@ -121,6 +121,8 @@ companies:
 | 影视飓风 | 影视飓风     | 社招 | https://mediastorm.jobs.feishu.cn               | feishu      |
 | 小红书   | 小红书校招   | 校招 | https://job.xiaohongshu.com/campus/position     | xiaohongshu |
 | 小红书   | 小红书社招   | 社招 | https://job.xiaohongshu.com/social/position     | xiaohongshu |
+| vivo     | vivo 校招    | 校招 | https://hr-campus.vivo.com/jobs                 | vivo        |
+| vivo     | vivo 社招    | 社招 | https://hr.vivo.com/jobs                        | vivo_social |
 
 ### 飞书招聘系统域名
 
@@ -213,8 +215,10 @@ job-harvester/
 
 ## 版本历史
 
-**最新版本：v0.5.3** (2026-03-06)
+**最新版本：v0.5.4** (2026-03-11)
 
+- 新增 vivo 校招爬虫支持（北森系统，267 个职位）
+- 新增 vivo 社招爬虫支持（自研系统，853 个职位）
 - 新增小红书社招支持
 - 新增小红书校招爬虫
 

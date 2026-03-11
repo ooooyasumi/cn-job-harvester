@@ -60,3 +60,18 @@ companies:
         path: /social/position
         job_type: social
         enabled: true
+
+  - name: vivo
+    sites:
+      - name: vivo 校招
+        scraper: vivo
+        domain: hr-campus.vivo.com
+        path: /jobs
+        job_type: campus
+        enabled: true
+      - name: vivo 社招
+        scraper: vivo_social
+        domain: hr.vivo.com
+        path: /jobs
+        job_type: social
+        enabled: true

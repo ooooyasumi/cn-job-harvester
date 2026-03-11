@@ -63,3 +63,6 @@ output/
 # Claude
 .claude/
 .claude-project/
+
+# Development docs
+DOCUMENT/
