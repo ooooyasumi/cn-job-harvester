@@ -1,5 +1,49 @@
 # 更新日志
 
+## v0.5.5 (2026-03-12)
+
+### 新增功能
+
+#### 影石招聘爬虫支持
+- 新增影石校招爬虫（飞书系统）
+  - 网站：https://arashivision.jobs.feishu.cn/campus
+  - 职位数：约 122 个
+  - 爬虫：`feishu`
+- 新增影石社招爬虫（飞书系统）
+  - 网站：https://arashivision.jobs.feishu.cn/social
+  - 职位数：约 673 个
+  - 爬虫：`feishu`
+
+**配置示例**:
+```yaml
+- name: 影石
+  sites:
+    - name: 影石校招
+      scraper: feishu
+      domain: arashivision.jobs.feishu.cn
+      path: /campus
+      job_type: campus
+    - name: 影石社招
+      scraper: feishu
+      domain: arashivision.jobs.feishu.cn
+      path: /social
+      job_type: social
+```
+
+### Bug 修复
+
+- 修复飞书爬虫不支持 `path` 参数的问题（硬编码 `/index/`）
+- 修复飞书爬虫翻页时数据重复累积的问题（22050 → 673）
+- 修复飞书爬虫 `job_type` 判断逻辑（'正式'/'实习' → '校招'/'社招'）
+- 修复飞书爬虫翻页数据丢失问题（累积所有页数据而非清空）
+
+### 文档更新
+
+- README.md: 添加影石到已支持网站列表，更新飞书系统域名表格
+- 影石同时支持校招和社招
+
+---
+
 ## v0.5.4 (2026-03-11)
 
 ### 新增功能

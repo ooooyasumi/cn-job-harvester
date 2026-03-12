@@ -22,6 +22,10 @@ class FeishuScraper(BaseScraper):
         self.page: Page = None
         self._company_name_from_page: str = ""
         self._api_responses: List[Dict] = []
+        # 处理 path 参数
+        self.path = kwargs.get('path', '/index')
+        if not self.path.startswith('/'):
+            self.path = '/' + self.path
 
     async def _init_browser(self):
         """初始化浏览器"""
@@ -65,7 +69,7 @@ class FeishuScraper(BaseScraper):
         try:
             # 访问首页
             self.progress("正在访问招聘首页...")
-            url = f"https://{self.domain}/index/"
+            url = f"https://{self.domain}{self.path}"
             await self.page.goto(url, timeout=60000)
             await self.page.wait_for_load_state("networkidle")
             await asyncio.sleep(3)
@@ -89,13 +93,19 @@ class FeishuScraper(BaseScraper):
                 if page_count > 1:
                     # 翻页爬取
                     for page_num in range(2, page_count + 1):
-                        self.progress_with_eta(page_num, page_count, f"已获 {len(all_posts)} 职位")
+                        # 记录当前数据量
+                        prev_count = len(all_posts)
+                        self.progress_with_eta(page_num, page_count, f"已获 {prev_count} 职位")
                         await self._goto_page(page_num)
                         await asyncio.sleep(2)
-                        # 重新收集
-                        all_posts = []
+                        # 获取当前页新增的数据（只添加新的）
                         for resp in self._api_responses:
-                            all_posts.extend(resp.get('list', []))
+                            new_posts = resp.get('list', [])
+                            for post in new_posts:
+                                post_id = post.get('id', '')
+                                # 避免重复添加
+                                if not any(p.get('id') == post_id for p in all_posts):
+                                    all_posts.append(post)
 
                 # 去重
                 self.progress("正在处理数据...")
@@ -248,12 +258,12 @@ class FeishuScraper(BaseScraper):
             # 职位类型
             recruit_type = post.get('recruit_type', {}) or {}
             job_type = recruit_type.get('name', '')
-            if job_type == '全职':
-                parent = recruit_type.get('parent', {})
-                if parent:
-                    parent_name = parent.get('name', '')
-                    if parent_name in ['社招', '校招']:
-                        job_type = parent_name
+            # 检查父类型（校招/社招）
+            parent = recruit_type.get('parent', {})
+            if parent:
+                parent_name = parent.get('name', '')
+                if parent_name in ['社招', '校招']:
+                    job_type = parent_name
             if not job_type:
                 job_type = '社招'
 
@@ -326,4 +336,4 @@ class FeishuScraper(BaseScraper):
     def get_job_url(self, job_id: str = "") -> str:
         if job_id:
             return f"https://{self.domain}/job/{job_id}"
-        return f"https://{self.domain}/index/"
+        return f"https://{self.domain}{self.path}"

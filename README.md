@@ -1,6 +1,19 @@
 # JobHarvester - 招聘数据爬取工具
 
+<div align="center">
+
+[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg?logo=python)](https://python.org)
+[![Version](https://img.shields.io/badge/Version-0.5.5-green.svg)](https://github.com/ooooyasumi/cn-job-harvester/releases)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Last Updated](https://img.shields.io/badge/Last_Updated-2026--03--12-orange.svg)](https://github.com/ooooyasumi/cn-job-harvester)
+[![Issues](https://img.shields.io/badge/Issues-Welcome-red.svg?logo=github)](https://github.com/ooooyasumi/cn-job-harvester/issues)
+[![Stars](https://img.shields.io/badge/Stars-⭐-yellow.svg?logo=github)](https://github.com/ooooyasumi/cn-job-harvester)
+
+</div>
+
 一个命令行工具，用于自动爬取公司招聘职位信息，支持 CSV/Excel 格式导出。采用可扩展的模块化架构，支持多种招聘平台。
+
+---
 
 ## 功能特性
 
@@ -9,6 +22,17 @@
 - **交互式选择**：先选类型 → 再选渠道，支持多选
 - **模块化架构**：添加新爬虫只需创建一个文件
 - **多种导出格式**：支持 CSV、Excel 格式
+
+## 支持的公司
+
+| 公司 | 校招 | 社招 |
+| ---- | :--: | :--: |
+| 字节跳动 | ✓ | ✓ |
+| 腾讯 | ✓ | ✓ |
+| 影视飓风 | - | ✓ |
+| 小红书 | ✓ | ✓ |
+| vivo | ✓ | ✓ |
+| 影石 | ✓ | ✓ |
 
 ## 快速开始
 
@@ -123,6 +147,8 @@ companies:
 | 小红书   | 小红书社招   | 社招 | https://job.xiaohongshu.com/social/position     | xiaohongshu |
 | vivo     | vivo 校招    | 校招 | https://hr-campus.vivo.com/jobs                 | vivo        |
 | vivo     | vivo 社招    | 社招 | https://hr.vivo.com/jobs                        | vivo_social |
+| 影石     | 影石校招     | 校招 | https://arashivision.jobs.feishu.cn/campus      | feishu      |
+| 影石     | 影石社招     | 社招 | https://arashivision.jobs.feishu.cn/social      | feishu      |
 
 ### 飞书招聘系统域名
 
@@ -131,6 +157,7 @@ companies:
 | 公司     | 域名                      | 社招 | 校招 |
 | -------- | ------------------------- | :--: | :--: |
 | 影视飓风 | mediastorm.jobs.feishu.cn |  ✓  |  -  |
+| 影石     | arashivision.jobs.feishu.cn |  ✓  |  ✓  |
 
 > 如果你知道更多使用飞书招聘的公司域名，可以添加到配置文件中。
 
@@ -215,12 +242,11 @@ job-harvester/
 
 ## 版本历史
 
-**最新版本：v0.5.4** (2026-03-11)
+**最新版本：v0.5.5** (2026-03-12)
 
-- 新增 vivo 校招爬虫支持（北森系统，267 个职位）
-- 新增 vivo 社招爬虫支持（自研系统，853 个职位）
-- 新增小红书社招支持
-- 新增小红书校招爬虫
+- 新增影石校招爬虫支持（飞书系统，122 个职位）
+- 新增影石社招爬虫支持（飞书系统，673 个职位）
+- 修复飞书爬虫 path 参数、翻页数据重复、job_type 判断等 bug
 
 👉 [查看完整更新日志](CHANGELOG.md)
 

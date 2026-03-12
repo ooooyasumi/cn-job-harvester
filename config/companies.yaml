@@ -75,3 +75,18 @@ companies:
         path: /jobs
         job_type: social
         enabled: true
+
+  - name: 影石
+    sites:
+      - name: 影石校招
+        scraper: feishu
+        domain: arashivision.jobs.feishu.cn
+        path: /campus
+        job_type: campus
+        enabled: true
+      - name: 影石社招
+        scraper: feishu
+        domain: arashivision.jobs.feishu.cn
+        path: /social
+        job_type: social
+        enabled: true
